@@ -1,4 +1,5 @@
 class Screen {
+public:
   struct Regs {
     bool addsub_mode;
     bool direct_color;
@@ -13,11 +14,12 @@ class Screen {
     unsigned color;
   } regs;
 
+private:
   struct Output {
     struct Pixel {
-      unsigned color;
-      unsigned priority;
-      unsigned source;
+      uint16 color;
+      uint8 priority;
+      uint8 source;
     } main[256], sub[256];
 
     alwaysinline void plot_main(unsigned x, unsigned color, unsigned priority, unsigned source);
@@ -41,4 +43,6 @@ class Screen {
 
   PPU& self;
   friend class PPU;
+  friend class Background;
+  friend class Sprite;
 };

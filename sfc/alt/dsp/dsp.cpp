@@ -21,8 +21,12 @@ void DSP::synchronize_smp() {
 }
 
 void DSP::enter() {
-  spc_dsp.run(1);
-  step(24);
+  int clocks = 1;
+  if(clock <= -(24 * 32)) clocks = 32;
+  else if(clock <= -24) clocks = (int)((-clock) / 24);
+  if(clocks < 1) clocks = 1;
+  spc_dsp.run(clocks);
+  step(24 * clocks);
 
   signed count = spc_dsp.sample_count();
   if(count > 0) {

@@ -1,4 +1,4 @@
-void R65816::serialize(serializer& s) {
+template<typename Impl> void R65816<Impl>::serialize(serializer& s) {
   s.integer(regs.pc.d);
 
   s.integer(regs.a.w);

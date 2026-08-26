@@ -76,7 +76,8 @@ endif
 ifeq ($(platform), unix)
    TARGET := $(TARGET_NAME)_libretro.so
    fpic := -fPIC
-   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=target-libretro/link.T
+   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=target-libretro/link.T -pthread
+   FLAGS += -pthread
    ifneq ($(shell uname -p | grep -E '((i.|x)86|amd64)'),)
       IS_X86 = 1
    endif
@@ -466,8 +467,9 @@ else
    CC ?= gcc
    CXX ?= g++
    IS_X86 = 1
-   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=target-libretro/link.T
-   LDFLAGS += -static-libgcc -static-libstdc++ -lwinmm -lws2_32
+   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=target-libretro/link.T -pthread
+   FLAGS += -pthread
+   LDFLAGS += -static-libgcc -static-libstdc++ -lwinmm -lws2_32 -pthread
    WINDOWS_VERSION = 1
 endif
 

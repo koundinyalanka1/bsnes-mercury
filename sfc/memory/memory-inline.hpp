@@ -95,7 +95,11 @@ uint8 Bus::read(unsigned addr) {
   if (fast_read[addr>>fast_page_size_bits]) data = fast_read[addr>>fast_page_size_bits][addr];
   else data = reader[lookup[addr]](target[addr]);
 
+#if defined(__GNUC__) || defined(__clang__)
+  if(__builtin_expect(cheat.enable(), 0)) {
+#else
   if(cheat.enable()) {
+#endif
     if(auto result = cheat.find(addr, data)) return result();
   }
 

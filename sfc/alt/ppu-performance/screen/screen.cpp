@@ -1,11 +1,12 @@
 #ifdef PPU_CPP
 
 unsigned PPU::Screen::get_palette(unsigned color) {
-  #if defined(ARCH_LSB)
-  return ((uint16*)ppu.cgram)[color];
+  const uint8* cgram = self.cgram_data();
+  #if defined(ENDIAN_LSB)
+  return ((const uint16*)cgram)[color];
   #else
   color <<= 1;
-  return (ppu.cgram[color + 0] << 0) + (ppu.cgram[color + 1] << 8);
+  return (cgram[color + 0] << 0) + (cgram[color + 1] << 8);
   #endif
 }
 
@@ -16,7 +17,8 @@ unsigned PPU::Screen::get_direct_color(unsigned p, unsigned t) {
 }
 
 uint16 PPU::Screen::addsub(unsigned x, unsigned y, bool halve) {
-  if(!regs.color_mode) {
+  const bool color_mode = self.render_src ? self.render_src->screen_regs.color_mode : regs.color_mode;
+  if(!color_mode) {
     if(!halve) {
       unsigned sum = x + y;
       unsigned carry = (sum - ((x ^ y) & 0x0421)) & 0x8420;
@@ -36,9 +38,11 @@ uint16 PPU::Screen::addsub(unsigned x, unsigned y, bool halve) {
 }
 
 void PPU::Screen::scanline() {
+  const auto& pregs = self.render_regs();
+  const auto& r = self.render_src ? self.render_src->screen_regs : regs;
   unsigned main_color = get_palette(0);
-  unsigned sub_color = (self.regs.pseudo_hires == false && self.regs.bgmode != 5 && self.regs.bgmode != 6)
-                     ? regs.color : main_color;
+  unsigned sub_color = (pregs.pseudo_hires == false && pregs.bgmode != 5 && pregs.bgmode != 6)
+                     ? r.color : main_color;
 
   for(unsigned x = 0; x < 256; x++) {
     output.main[x].color = main_color;
@@ -55,18 +59,20 @@ void PPU::Screen::scanline() {
 }
 
 void PPU::Screen::render_black() {
-  uint32* data = self.output + self.vcounter() * 1024;
-  if(self.interlace() && self.field()) data += 512;
-  memset(data, 0, self.display.width << 2);
+  uint32* data = self.output + self.render_vcounter() * 1024;
+  if(self.render_interlace() && self.render_field()) data += 512;
+  unsigned width = self.render_src ? self.render_src->display_width : self.display.width;
+  memset(data, 0, width << 2);
 }
 
 uint16 PPU::Screen::get_pixel_main(unsigned x) {
+  const auto& r = self.render_src ? self.render_src->screen_regs : regs;
   auto main = output.main[x];
   auto sub = output.sub[x];
 
-  if(!regs.addsub_mode) {
+  if(!r.addsub_mode) {
     sub.source = 6;
-    sub.color = regs.color;
+    sub.color = r.color;
   }
 
   if(!window.main[x]) {
@@ -76,10 +82,10 @@ uint16 PPU::Screen::get_pixel_main(unsigned x) {
     main.color = 0x0000;
   }
 
-  if(main.source != 5 && regs.color_enable[main.source] && window.sub[x]) {
+  if(main.source != 5 && r.color_enable[main.source] && window.sub[x]) {
     bool halve = false;
-    if(regs.color_halve && window.main[x]) {
-      if(!regs.addsub_mode || sub.source != 6) halve = true;
+    if(r.color_halve && window.main[x]) {
+      if(!r.addsub_mode || sub.source != 6) halve = true;
     }
     return addsub(main.color, sub.color, halve);
   }
@@ -88,12 +94,13 @@ uint16 PPU::Screen::get_pixel_main(unsigned x) {
 }
 
 uint16 PPU::Screen::get_pixel_sub(unsigned x) {
+  const auto& r = self.render_src ? self.render_src->screen_regs : regs;
   auto main = output.sub[x];
   auto sub = output.main[x];
 
-  if(!regs.addsub_mode) {
+  if(!r.addsub_mode) {
     sub.source = 6;
-    sub.color = regs.color;
+    sub.color = r.color;
   }
 
   if(!window.main[x]) {
@@ -103,10 +110,10 @@ uint16 PPU::Screen::get_pixel_sub(unsigned x) {
     main.color = 0x0000;
   }
 
-  if(main.source != 5 && regs.color_enable[main.source] && window.sub[x]) {
+  if(main.source != 5 && r.color_enable[main.source] && window.sub[x]) {
     bool halve = false;
-    if(regs.color_halve && window.main[x]) {
-      if(!regs.addsub_mode || sub.source != 6) halve = true;
+    if(r.color_halve && window.main[x]) {
+      if(!r.addsub_mode || sub.source != 6) halve = true;
     }
     return addsub(main.color, sub.color, halve);
   }
@@ -115,17 +122,29 @@ uint16 PPU::Screen::get_pixel_sub(unsigned x) {
 }
 
 void PPU::Screen::render() {
-  uint32* data = self.output + self.vcounter() * 1024;
-  if(self.interlace() && self.field()) data += 512;
+  const auto& pregs = self.render_regs();
+  const auto& r = self.render_src ? self.render_src->screen_regs : regs;
+  uint32* data = self.output + self.render_vcounter() * 1024;
+  if(self.render_interlace() && self.render_field()) data += 512;
 
-  if(!self.regs.pseudo_hires && self.regs.bgmode != 5 && self.regs.bgmode != 6) {
-    for(unsigned i = 0; i < 256; i++) {
-      data[i] = self.regs.display_brightness << 15 | get_pixel_main(i);
+  bool any_math = false;
+  for(unsigned n = 0; n < 7; n++) any_math |= r.color_enable[n];
+
+  if(!pregs.pseudo_hires && pregs.bgmode != 5 && pregs.bgmode != 6) {
+    if(!any_math) {
+      for(unsigned i = 0; i < 256; i++) {
+        unsigned color = window.main[i] ? output.main[i].color : 0;
+        data[i] = pregs.display_brightness << 15 | color;
+      }
+    } else {
+      for(unsigned i = 0; i < 256; i++) {
+        data[i] = pregs.display_brightness << 15 | get_pixel_main(i);
+      }
     }
   } else {
     for(unsigned i = 0; i < 256; i++) {
-      *data++ = self.regs.display_brightness << 15 | get_pixel_sub(i);
-      *data++ = self.regs.display_brightness << 15 | get_pixel_main(i);
+      *data++ = pregs.display_brightness << 15 | get_pixel_sub(i);
+      *data++ = pregs.display_brightness << 15 | get_pixel_main(i);
     }
   }
 }

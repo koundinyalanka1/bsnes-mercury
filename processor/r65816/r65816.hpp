@@ -7,6 +7,7 @@ namespace Processor {
 //* Ricoh 5A22
 //* Nintendo SA-1
 
+template<typename Impl>
 struct R65816 {
   #include "registers.hpp"
   #include "memory.hpp"
@@ -16,12 +17,22 @@ struct R65816 {
   reg24_t aa, rd;
   uint8_t sp, dp;
 
-  virtual void op_io() = 0;
-  virtual uint8_t op_read(uint32_t addr) = 0;
-  virtual void op_write(uint32_t addr, uint8_t data) = 0;
-  virtual void last_cycle() = 0;
-  virtual bool interrupt_pending() = 0;
-  virtual void op_irq();
+  alwaysinline void op_io() {
+    static_cast<Impl*>(this)->op_io();
+  }
+  alwaysinline uint8_t op_read(uint32_t addr) {
+    return static_cast<Impl*>(this)->op_read(addr);
+  }
+  alwaysinline void op_write(uint32_t addr, uint8_t data) {
+    static_cast<Impl*>(this)->op_write(addr, data);
+  }
+  alwaysinline void last_cycle() {
+    static_cast<Impl*>(this)->last_cycle();
+  }
+  alwaysinline bool interrupt_pending() {
+    return static_cast<Impl*>(this)->interrupt_pending();
+  }
+  void op_irq();
 
   virtual uint8 disassembler_read(uint32 addr) { return 0u; }
 

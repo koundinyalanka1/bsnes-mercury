@@ -1,4 +1,4 @@
-void R65816::initialize_opcode_table() {
+template<typename Impl> void R65816<Impl>::initialize_opcode_table() {
   #define opA(  id, name       ) op_table[table_EM + id] = op_table[table_MX + id] = op_table[table_Mx + id] = op_table[table_mX + id] = op_table[table_mx + id] = &R65816::op_##name;
   #define opAII(id, name, x, y ) op_table[table_EM + id] = op_table[table_MX + id] = op_table[table_Mx + id] = op_table[table_mX + id] = op_table[table_mx + id] = &R65816::op_##name<x, y>;
   #define opE(  id, name       ) op_table[table_EM + id] = &R65816::op_##name##_e; op_table[table_MX + id] = op_table[table_Mx + id] = op_table[table_mX + id] = op_table[table_mx + id] = &R65816::op_##name##_n;
@@ -289,7 +289,7 @@ void R65816::initialize_opcode_table() {
   #undef opXFI
 }
 
-void R65816::update_table() {
+template<typename Impl> void R65816<Impl>::update_table() {
   if(regs.e) {
     opcode_table = &op_table[table_EM];
   } else if(regs.p.m) {

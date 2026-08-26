@@ -1,12 +1,12 @@
-void R65816::op_nop() {
+template<typename Impl> void R65816<Impl>::op_nop() {
 L op_io_irq();
 }
 
-void R65816::op_wdm() {
+template<typename Impl> void R65816<Impl>::op_wdm() {
 L op_readpc();
 }
 
-void R65816::op_xba() {
+template<typename Impl> void R65816<Impl>::op_xba() {
   op_io();
 L op_io();
   regs.a.l ^= regs.a.h;
@@ -16,7 +16,7 @@ L op_io();
   regs.p.z = (regs.a.l == 0);
 }
 
-template<int adjust> void R65816::op_move_b() {
+template<typename Impl> template<int adjust> void R65816<Impl>::op_move_b() {
   dp = op_readpc();
   sp = op_readpc();
   regs.db = dp;
@@ -29,7 +29,7 @@ L op_io();
   if(regs.a.w--) regs.pc.w -= 3;
 }
 
-template<int adjust> void R65816::op_move_w() {
+template<typename Impl> template<int adjust> void R65816<Impl>::op_move_w() {
   dp = op_readpc();
   sp = op_readpc();
   regs.db = dp;
@@ -42,7 +42,7 @@ L op_io();
   if(regs.a.w--) regs.pc.w -= 3;
 }
 
-template<int vectorE, int vectorN> void R65816::op_interrupt_e() {
+template<typename Impl> template<int vectorE, int vectorN> void R65816<Impl>::op_interrupt_e() {
   op_readpc();
   op_writestack(regs.pc.h);
   op_writestack(regs.pc.l);
@@ -55,7 +55,7 @@ L rd.h = op_readlong(vectorE + 1);
   regs.pc.w = rd.w;
 }
 
-template<int vectorE, int vectorN> void R65816::op_interrupt_n() {
+template<typename Impl> template<int vectorE, int vectorN> void R65816<Impl>::op_interrupt_n() {
   op_readpc();
   op_writestack(regs.pc.b);
   op_writestack(regs.pc.h);
@@ -69,13 +69,13 @@ L rd.h = op_readlong(vectorN + 1);
   regs.pc.w = rd.w;
 }
 
-void R65816::op_stp() {
+template<typename Impl> void R65816<Impl>::op_stp() {
   while((regs.wai = true)) {
 L   op_io();
   }
 }
 
-void R65816::op_wai() {
+template<typename Impl> void R65816<Impl>::op_wai() {
   regs.wai = true;
   while(regs.wai) {
 L   op_io();
@@ -83,7 +83,7 @@ L   op_io();
   op_io();
 }
 
-void R65816::op_xce() {
+template<typename Impl> void R65816<Impl>::op_xce() {
 L op_io_irq();
   bool carry = regs.p.c;
   regs.p.c = regs.e;
@@ -99,12 +99,12 @@ L op_io_irq();
   update_table();
 }
 
-template<int mask, int value> void R65816::op_flag() {
+template<typename Impl> template<int mask, int value> void R65816<Impl>::op_flag() {
 L op_io_irq();
   regs.p = (regs.p & ~mask) | value;
 }
 
-template<int mode> void R65816::op_pflag_e() {
+template<typename Impl> template<int mode> void R65816<Impl>::op_pflag_e() {
   rd.l = op_readpc();
 L op_io();
   regs.p = (mode ? regs.p | rd.l : regs.p & ~rd.l);
@@ -116,7 +116,7 @@ L op_io();
   update_table();
 }
 
-template<int mode> void R65816::op_pflag_n() {
+template<typename Impl> template<int mode> void R65816<Impl>::op_pflag_n() {
   rd.l = op_readpc();
 L op_io();
   regs.p = (mode ? regs.p | rd.l : regs.p & ~rd.l);
@@ -127,94 +127,94 @@ L op_io();
   update_table();
 }
 
-template<int from, int to> void R65816::op_transfer_b() {
+template<typename Impl> template<int from, int to> void R65816<Impl>::op_transfer_b() {
 L op_io_irq();
   regs.r[to].l = regs.r[from].l;
   regs.p.n = (regs.r[to].l & 0x80);
   regs.p.z = (regs.r[to].l == 0);
 }
 
-template<int from, int to> void R65816::op_transfer_w() {
+template<typename Impl> template<int from, int to> void R65816<Impl>::op_transfer_w() {
 L op_io_irq();
   regs.r[to].w = regs.r[from].w;
   regs.p.n = (regs.r[to].w & 0x8000);
   regs.p.z = (regs.r[to].w == 0);
 }
 
-void R65816::op_tcs_e() {
+template<typename Impl> void R65816<Impl>::op_tcs_e() {
 L op_io_irq();
   regs.s.l = regs.a.l;
 }
 
-void R65816::op_tcs_n() {
+template<typename Impl> void R65816<Impl>::op_tcs_n() {
 L op_io_irq();
   regs.s.w = regs.a.w;
 }
 
-void R65816::op_tsx_b() {
+template<typename Impl> void R65816<Impl>::op_tsx_b() {
 L op_io_irq();
   regs.x.l = regs.s.l;
   regs.p.n = (regs.x.l & 0x80);
   regs.p.z = (regs.x.l == 0);
 }
 
-void R65816::op_tsx_w() {
+template<typename Impl> void R65816<Impl>::op_tsx_w() {
 L op_io_irq();
   regs.x.w = regs.s.w;
   regs.p.n = (regs.x.w & 0x8000);
   regs.p.z = (regs.x.w == 0);
 }
 
-void R65816::op_txs_e() {
+template<typename Impl> void R65816<Impl>::op_txs_e() {
 L op_io_irq();
   regs.s.l = regs.x.l;
 }
 
-void R65816::op_txs_n() {
+template<typename Impl> void R65816<Impl>::op_txs_n() {
 L op_io_irq();
   regs.s.w = regs.x.w;
 }
 
-template<int n> void R65816::op_push_b() {
+template<typename Impl> template<int n> void R65816<Impl>::op_push_b() {
   op_io();
 L op_writestack(regs.r[n].l);
 }
 
-template<int n> void R65816::op_push_w() {
+template<typename Impl> template<int n> void R65816<Impl>::op_push_w() {
   op_io();
   op_writestack(regs.r[n].h);
 L op_writestack(regs.r[n].l);
 }
 
-void R65816::op_phd_e() {
+template<typename Impl> void R65816<Impl>::op_phd_e() {
   op_io();
   op_writestackn(regs.d.h);
 L op_writestackn(regs.d.l);
   regs.s.h = 0x01;
 }
 
-void R65816::op_phd_n() {
+template<typename Impl> void R65816<Impl>::op_phd_n() {
   op_io();
   op_writestackn(regs.d.h);
 L op_writestackn(regs.d.l);
 }
 
-void R65816::op_phb() {
+template<typename Impl> void R65816<Impl>::op_phb() {
   op_io();
 L op_writestack(regs.db);
 }
 
-void R65816::op_phk() {
+template<typename Impl> void R65816<Impl>::op_phk() {
   op_io();
 L op_writestack(regs.pc.b);
 }
 
-void R65816::op_php() {
+template<typename Impl> void R65816<Impl>::op_php() {
   op_io();
 L op_writestack(regs.p);
 }
 
-template<int n> void R65816::op_pull_b() {
+template<typename Impl> template<int n> void R65816<Impl>::op_pull_b() {
   op_io();
   op_io();
 L regs.r[n].l = op_readstack();
@@ -222,7 +222,7 @@ L regs.r[n].l = op_readstack();
   regs.p.z = (regs.r[n].l == 0);
 }
 
-template<int n> void R65816::op_pull_w() {
+template<typename Impl> template<int n> void R65816<Impl>::op_pull_w() {
   op_io();
   op_io();
   regs.r[n].l = op_readstack();
@@ -231,7 +231,7 @@ L regs.r[n].h = op_readstack();
   regs.p.z = (regs.r[n].w == 0);
 }
 
-void R65816::op_pld_e() {
+template<typename Impl> void R65816<Impl>::op_pld_e() {
   op_io();
   op_io();
   regs.d.l = op_readstackn();
@@ -241,7 +241,7 @@ L regs.d.h = op_readstackn();
   regs.s.h = 0x01;
 }
 
-void R65816::op_pld_n() {
+template<typename Impl> void R65816<Impl>::op_pld_n() {
   op_io();
   op_io();
   regs.d.l = op_readstackn();
@@ -250,7 +250,7 @@ L regs.d.h = op_readstackn();
   regs.p.z = (regs.d.w == 0);
 }
 
-void R65816::op_plb() {
+template<typename Impl> void R65816<Impl>::op_plb() {
   op_io();
   op_io();
 L regs.db = op_readstack();
@@ -258,7 +258,7 @@ L regs.db = op_readstack();
   regs.p.z = (regs.db == 0);
 }
 
-void R65816::op_plp_e() {
+template<typename Impl> void R65816<Impl>::op_plp_e() {
   op_io();
   op_io();
 L regs.p = op_readstack() | 0x30;
@@ -269,7 +269,7 @@ L regs.p = op_readstack() | 0x30;
   update_table();
 }
 
-void R65816::op_plp_n() {
+template<typename Impl> void R65816<Impl>::op_plp_n() {
   op_io();
   op_io();
 L regs.p = op_readstack();
@@ -280,7 +280,7 @@ L regs.p = op_readstack();
   update_table();
 }
 
-void R65816::op_pea_e() {
+template<typename Impl> void R65816<Impl>::op_pea_e() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_writestackn(aa.h);
@@ -288,14 +288,14 @@ L op_writestackn(aa.l);
   regs.s.h = 0x01;
 }
 
-void R65816::op_pea_n() {
+template<typename Impl> void R65816<Impl>::op_pea_n() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_writestackn(aa.h);
 L op_writestackn(aa.l);
 }
 
-void R65816::op_pei_e() {
+template<typename Impl> void R65816<Impl>::op_pei_e() {
   dp = op_readpc();
   op_io_cond2();
   aa.l = op_readdp(dp + 0);
@@ -305,7 +305,7 @@ L op_writestackn(aa.l);
   regs.s.h = 0x01;
 }
 
-void R65816::op_pei_n() {
+template<typename Impl> void R65816<Impl>::op_pei_n() {
   dp = op_readpc();
   op_io_cond2();
   aa.l = op_readdp(dp + 0);
@@ -314,7 +314,7 @@ void R65816::op_pei_n() {
 L op_writestackn(aa.l);
 }
 
-void R65816::op_per_e() {
+template<typename Impl> void R65816<Impl>::op_per_e() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_io();
@@ -324,7 +324,7 @@ L op_writestackn(rd.l);
   regs.s.h = 0x01;
 }
 
-void R65816::op_per_n() {
+template<typename Impl> void R65816<Impl>::op_per_n() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_io();

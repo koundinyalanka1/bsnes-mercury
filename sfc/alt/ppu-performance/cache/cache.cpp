@@ -1,5 +1,20 @@
 #ifdef PPU_CPP
 
+void PPU::Cache::invalidate() {
+  memset(tilevalid[0], 0, 4096);
+  memset(tilevalid[1], 0, 2048);
+  memset(tilevalid[2], 0, 1024);
+}
+
+PPU::Cache::~Cache() {
+  delete[] tiledata[0];
+  delete[] tiledata[1];
+  delete[] tiledata[2];
+  delete[] tilevalid[0];
+  delete[] tilevalid[1];
+  delete[] tilevalid[2];
+}
+
 uint8* PPU::Cache::tile_2bpp(unsigned tile) {
   if(tilevalid[0][tile] == 0) {
     tilevalid[0][tile] = 1;
@@ -7,9 +22,10 @@ uint8* PPU::Cache::tile_2bpp(unsigned tile) {
     unsigned offset = tile << 4;
     unsigned y = 8;
     unsigned color, d0, d1;
+    const uint8* vram = self.vram_data();
     while(y--) {
-      d0 = ppu.vram[offset +  0];
-      d1 = ppu.vram[offset +  1];
+      d0 = vram[offset +  0];
+      d1 = vram[offset +  1];
       #define render_line(mask) \
         color  = !!(d0 & mask) << 0; \
         color |= !!(d1 & mask) << 1; \
@@ -36,11 +52,12 @@ uint8* PPU::Cache::tile_4bpp(unsigned tile) {
     unsigned offset = tile << 5;
     unsigned y = 8;
     unsigned color, d0, d1, d2, d3;
+    const uint8* vram = self.vram_data();
     while(y--) {
-      d0 = ppu.vram[offset +  0];
-      d1 = ppu.vram[offset +  1];
-      d2 = ppu.vram[offset + 16];
-      d3 = ppu.vram[offset + 17];
+      d0 = vram[offset +  0];
+      d1 = vram[offset +  1];
+      d2 = vram[offset + 16];
+      d3 = vram[offset + 17];
       #define render_line(mask) \
         color  = !!(d0 & mask) << 0; \
         color |= !!(d1 & mask) << 1; \
@@ -69,15 +86,16 @@ uint8* PPU::Cache::tile_8bpp(unsigned tile) {
     unsigned offset = tile << 6;
     unsigned y = 8;
     unsigned color, d0, d1, d2, d3, d4, d5, d6, d7;
+    const uint8* vram = self.vram_data();
     while(y--) {
-      d0 = ppu.vram[offset +  0];
-      d1 = ppu.vram[offset +  1];
-      d2 = ppu.vram[offset + 16];
-      d3 = ppu.vram[offset + 17];
-      d4 = ppu.vram[offset + 32];
-      d5 = ppu.vram[offset + 33];
-      d6 = ppu.vram[offset + 48];
-      d7 = ppu.vram[offset + 49];
+      d0 = vram[offset +  0];
+      d1 = vram[offset +  1];
+      d2 = vram[offset + 16];
+      d3 = vram[offset + 17];
+      d4 = vram[offset + 32];
+      d5 = vram[offset + 33];
+      d6 = vram[offset + 48];
+      d7 = vram[offset + 49];
       #define render_line(mask) \
         color  = !!(d0 & mask) << 0; \
         color |= !!(d1 & mask) << 1; \

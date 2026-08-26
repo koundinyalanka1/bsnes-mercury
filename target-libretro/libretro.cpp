@@ -1,4 +1,5 @@
 #include "libretro.h"
+#include <chrono>
 #include <sfc/sfc.hpp>
 #include <nall/stream/mmap.hpp>
 #include <nall/stream/file.hpp>
@@ -94,6 +95,7 @@ struct Callbacks : Emulator::Interface::Bind {
   retro_environment_t penviron;
   bool crop_overscan;
   bool gamma_ramp;
+  bool perf_stats;
   unsigned short region_mode;
   unsigned short aspect_ratio_mode;
   bool manifest;
@@ -456,7 +458,7 @@ static const char * get_var(const char * name, const char * defval)
 
 static const char * read_opt(const char * name, const char * defval)
 {
-	if (!strcmp(get_var("bsnes_violate_accuracy", "disabled"), "enabled"))
+	if (!strcmp(get_var("bsnes_violate_accuracy", "enabled"), "enabled"))
 		return get_var(name, defval);
 	else return defval;
 }
@@ -503,7 +505,7 @@ void retro_set_environment(retro_environment_t environ_cb)
    core_bind.penviron = environ_cb;
 
    static const struct retro_variable vars[] = {
-      { "bsnes_violate_accuracy", "Allow settings to reduce accuracy; disabled|enabled" },
+      { "bsnes_violate_accuracy", "Allow settings to reduce accuracy; enabled|disabled" },
       { "bsnes_chip_hle", "Special chip accuracy; LLE|HLE" },
       { "bsnes_superfx_overclock", "SuperFX speed; 100%|150%|200%|300%|400%|500%|1000%" },
          //Any integer is usable here, but there is no such thing as "any integer" in core options.
@@ -511,6 +513,11 @@ void retro_set_environment(retro_environment_t environ_cb)
       { "bsnes_aspect_ratio", "Preferred aspect ratio; auto|ntsc|pal" },
       { "bsnes_crop_overscan", "Crop overscan; disabled|enabled" }, 
       { "bsnes_gamma_ramp", "Gamma ramp (requires restart); disabled|enabled" },
+      { "bsnes_ppu_thread", "PPU render thread; auto|enabled|disabled" },
+      { "bsnes_perf_stats", "Log retro_run slice times; disabled|enabled" },
+      { "bsnes_ppu_fast", "Fast PPU paths; enabled|disabled" },
+      { "bsnes_frameskip", "PPU frameskip (CPU still runs); 0|1|2|3" },
+      { "bsnes_cpu_jit", "65816 JIT (interpreter if no backend); auto|disabled" },
 #ifdef EXPERIMENTAL_FEATURES
       { "bsnes_sgb_core", "Super Game Boy core; Internal|Gambatte" },
 #endif
@@ -638,6 +645,20 @@ static void update_variables(void) {
      update_system_geometry();
    }
 
+   const char * ppu_thread_opt = get_var("bsnes_ppu_thread", "auto");
+   unsigned ppu_thread_mode = 0;
+   if (!strcmp(ppu_thread_opt, "enabled")) ppu_thread_mode = 1;
+   else if (!strcmp(ppu_thread_opt, "disabled")) ppu_thread_mode = 2;
+   SuperFamicom::ppu.set_render_thread_mode(ppu_thread_mode);
+
+   const char * ppu_fast_opt = get_var("bsnes_ppu_fast", "enabled");
+   SuperFamicom::ppu.set_ppu_fast(strcmp(ppu_fast_opt, "disabled") != 0);
+
+   unsigned frameskip = (unsigned)strtoul(get_var("bsnes_frameskip", "0"), NULL, 10);
+   SuperFamicom::ppu.set_frameskip(frameskip);
+
+   core_bind.perf_stats = !strcmp(get_var("bsnes_perf_stats", "disabled"), "enabled");
+
    output(RETRO_LOG_DEBUG, "superfx_freq_orig: %u\n", superfx_freq_orig);
    output(RETRO_LOG_DEBUG, "SuperFamicom::superfx.frequency: %u\n", SuperFamicom::superfx.frequency);
    output(RETRO_LOG_DEBUG, "Overscan mode: %u\n", core_bind.crop_overscan);
@@ -688,7 +709,19 @@ void retro_run(void) {
   bool updated = false;
   if (core_bind.penviron(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     update_variables();
+  using clock = std::chrono::steady_clock;
+  clock::time_point t0, t1;
+  if (core_bind.perf_stats) t0 = clock::now();
   SuperFamicom::system.run();
+  SuperFamicom::ppu.drain_render();
+  if (core_bind.perf_stats) {
+    t1 = clock::now();
+    double run_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    output(RETRO_LOG_INFO, "[perf] retro_run %.2f ms ppu_thread=%d cores=%u fb_hash=%08x\n",
+      run_ms, SuperFamicom::ppu.render_thread_active() ? 1 : 0,
+      (unsigned)std::thread::hardware_concurrency(),
+      SuperFamicom::ppu.framebuffer_hash());
+  }
   if(core_bind.sampleBufPos) {
     core_bind.paudio(core_bind.sampleBuf.data(), core_bind.sampleBufPos >> 1);
     core_bind.sampleBufPos = 0;

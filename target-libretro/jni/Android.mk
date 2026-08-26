@@ -6,7 +6,7 @@ ifeq ($(PROFILE),)
   PROFILE := performance
 endif
 
-COREFLAGS := -fomit-frame-pointer -ffast-math -D__LIBRETRO__
+COREFLAGS := -O3 -fomit-frame-pointer -ffast-math -D__LIBRETRO__
 
 GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
 ifneq ($(GIT_VERSION)," unknown")
@@ -30,6 +30,7 @@ LOCAL_MODULE       := retro
 LOCAL_SRC_FILES    := $(SOURCES_CXX) $(SOURCES_C)
 LOCAL_CPPFLAGS     := -std=c++11 $(COREFLAGS)
 LOCAL_CFLAGS       := $(COREFLAGS)
-LOCAL_LDFLAGS      := -Wl,-version-script=$(CORE_DIR)/target-libretro/link.T
+LOCAL_LDFLAGS      := -Wl,-version-script=$(CORE_DIR)/target-libretro/link.T -pthread
+LOCAL_LDLIBS       := -latomic
 LOCAL_CPP_FEATURES := exceptions rtti
 include $(BUILD_SHARED_LIBRARY)

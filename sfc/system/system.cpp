@@ -19,6 +19,7 @@ void System::run() {
 
   scheduler.enter();
   if(scheduler.exit_reason() == Scheduler::ExitReason::FrameEvent) {
+    ppu.drain_render();
     video.update();
   }
 }
@@ -56,6 +57,7 @@ void System::runthreadtosave() {
     scheduler.enter();
     if(scheduler.exit_reason() == Scheduler::ExitReason::SynchronizeEvent) break;
     if(scheduler.exit_reason() == Scheduler::ExitReason::FrameEvent) {
+      ppu.drain_render();
       video.update();
     }
   }
@@ -99,6 +101,7 @@ void System::init() {
 }
 
 void System::term() {
+  ppu.drain_render();
 }
 
 void System::load() {

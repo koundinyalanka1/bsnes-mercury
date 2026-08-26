@@ -1,6 +1,9 @@
 #ifndef SFC_HPP
 #define SFC_HPP
 
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <emulator/emulator.hpp>
 #include <processor/arm/arm.hpp>
 #include <processor/gsu/gsu.hpp>
@@ -12,7 +15,7 @@
 namespace SuperFamicom {
   namespace Info {
     static const char Name[] = "bsnes";
-    static const unsigned SerializerVersion = 27;
+    static const unsigned SerializerVersion = 28;
   }
 }
 

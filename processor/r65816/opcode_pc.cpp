@@ -1,4 +1,4 @@
-template<int bit, int val> void R65816::op_branch() {
+template<typename Impl> template<int bit, int val> void R65816<Impl>::op_branch() {
   if((bool)(regs.p & bit) != val) {
 L   rd.l = op_readpc();
   } else {
@@ -10,7 +10,7 @@ L   op_io();
   }
 }
 
-void R65816::op_bra() {
+template<typename Impl> void R65816<Impl>::op_bra() {
   rd.l = op_readpc();
   aa.w = regs.pc.d + (int8)rd.l;
   op_io_cond6(aa.w);
@@ -18,27 +18,27 @@ L op_io();
   regs.pc.w = aa.w;
 }
 
-void R65816::op_brl() {
+template<typename Impl> void R65816<Impl>::op_brl() {
   rd.l = op_readpc();
   rd.h = op_readpc();
 L op_io();
   regs.pc.w = regs.pc.d + (int16)rd.w;
 }
 
-void R65816::op_jmp_addr() {
+template<typename Impl> void R65816<Impl>::op_jmp_addr() {
   rd.l = op_readpc();
 L rd.h = op_readpc();
   regs.pc.w = rd.w;
 }
 
-void R65816::op_jmp_long() {
+template<typename Impl> void R65816<Impl>::op_jmp_long() {
   rd.l = op_readpc();
   rd.h = op_readpc();
 L rd.b = op_readpc();
   regs.pc.d = rd.d & 0xffffff;
 }
 
-void R65816::op_jmp_iaddr() {
+template<typename Impl> void R65816<Impl>::op_jmp_iaddr() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   rd.l = op_readaddr(aa.w + 0);
@@ -46,7 +46,7 @@ L rd.h = op_readaddr(aa.w + 1);
   regs.pc.w = rd.w;
 }
 
-void R65816::op_jmp_iaddrx() {
+template<typename Impl> void R65816<Impl>::op_jmp_iaddrx() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_io();
@@ -55,7 +55,7 @@ L rd.h = op_readpbr(aa.w + regs.x.w + 1);
   regs.pc.w = rd.w;
 }
 
-void R65816::op_jmp_iladdr() {
+template<typename Impl> void R65816<Impl>::op_jmp_iladdr() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   rd.l = op_readaddr(aa.w + 0);
@@ -64,7 +64,7 @@ L rd.b = op_readaddr(aa.w + 2);
   regs.pc.d = rd.d & 0xffffff;
 }
 
-void R65816::op_jsr_addr() {
+template<typename Impl> void R65816<Impl>::op_jsr_addr() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_io();
@@ -74,7 +74,7 @@ L op_writestack(regs.pc.l);
   regs.pc.w = aa.w;
 }
 
-void R65816::op_jsr_long_e() {
+template<typename Impl> void R65816<Impl>::op_jsr_long_e() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_writestackn(regs.pc.b);
@@ -87,7 +87,7 @@ L op_writestackn(regs.pc.l);
   regs.s.h = 0x01;
 }
 
-void R65816::op_jsr_long_n() {
+template<typename Impl> void R65816<Impl>::op_jsr_long_n() {
   aa.l = op_readpc();
   aa.h = op_readpc();
   op_writestackn(regs.pc.b);
@@ -99,7 +99,7 @@ L op_writestackn(regs.pc.l);
   regs.pc.d = aa.d & 0xffffff;
 }
 
-void R65816::op_jsr_iaddrx_e() {
+template<typename Impl> void R65816<Impl>::op_jsr_iaddrx_e() {
   aa.l = op_readpc();
   op_writestackn(regs.pc.h);
   op_writestackn(regs.pc.l);
@@ -111,7 +111,7 @@ L rd.h = op_readpbr(aa.w + regs.x.w + 1);
   regs.s.h = 0x01;
 }
 
-void R65816::op_jsr_iaddrx_n() {
+template<typename Impl> void R65816<Impl>::op_jsr_iaddrx_n() {
   aa.l = op_readpc();
   op_writestackn(regs.pc.h);
   op_writestackn(regs.pc.l);
@@ -122,7 +122,7 @@ L rd.h = op_readpbr(aa.w + regs.x.w + 1);
   regs.pc.w = rd.w;
 }
 
-void R65816::op_rti_e() {
+template<typename Impl> void R65816<Impl>::op_rti_e() {
   op_io();
   op_io();
   regs.p = op_readstack() | 0x30;
@@ -131,7 +131,7 @@ L rd.h = op_readstack();
   regs.pc.w = rd.w;
 }
 
-void R65816::op_rti_n() {
+template<typename Impl> void R65816<Impl>::op_rti_n() {
   op_io();
   op_io();
   regs.p = op_readstack();
@@ -146,7 +146,7 @@ L rd.b = op_readstack();
   update_table();
 }
 
-void R65816::op_rts() {
+template<typename Impl> void R65816<Impl>::op_rts() {
   op_io();
   op_io();
   rd.l = op_readstack();
@@ -155,7 +155,7 @@ L op_io();
   regs.pc.w = ++rd.w;
 }
 
-void R65816::op_rtl_e() {
+template<typename Impl> void R65816<Impl>::op_rtl_e() {
   op_io();
   op_io();
   rd.l = op_readstackn();
@@ -166,7 +166,7 @@ L rd.b = op_readstackn();
   regs.s.h = 0x01;
 }
 
-void R65816::op_rtl_n() {
+template<typename Impl> void R65816<Impl>::op_rtl_n() {
   op_io();
   op_io();
   rd.l = op_readstackn();

@@ -1,4 +1,4 @@
-uint8 R65816::dreadb(uint32 addr) {
+template<typename Impl> uint8 R65816<Impl>::dreadb(uint32 addr) {
   if((addr & 0x40ffff) >= 0x2000 && (addr & 0x40ffff) <= 0x5fff) {
     //$[00-3f|80-bf]:[2000-5fff]
     //do not read MMIO registers within debugger
@@ -7,14 +7,14 @@ uint8 R65816::dreadb(uint32 addr) {
   return disassembler_read(addr);
 }
 
-uint16 R65816::dreadw(uint32 addr) {
+template<typename Impl> uint16 R65816<Impl>::dreadw(uint32 addr) {
   uint16 r;
   r  = dreadb((addr + 0) & 0xffffff) <<  0;
   r |= dreadb((addr + 1) & 0xffffff) <<  8;
   return r;
 }
 
-uint32 R65816::dreadl(uint32 addr) {
+template<typename Impl> uint32 R65816<Impl>::dreadl(uint32 addr) {
   uint32 r;
   r  = dreadb((addr + 0) & 0xffffff) <<  0;
   r |= dreadb((addr + 1) & 0xffffff) <<  8;
@@ -22,7 +22,7 @@ uint32 R65816::dreadl(uint32 addr) {
   return r;
 }
 
-uint32 R65816::decode(uint8 offset_type, uint32 addr) {
+template<typename Impl> uint32 R65816<Impl>::decode(uint8 offset_type, uint32 addr) {
   uint32 r = 0;
 
   switch(offset_type) {
@@ -102,7 +102,7 @@ uint32 R65816::decode(uint8 offset_type, uint32 addr) {
   return(r & 0xffffff);
 }
 
-void R65816::disassemble_opcode(char* output, uint32 addr) {
+template<typename Impl> void R65816<Impl>::disassemble_opcode(char* output, uint32 addr) {
   static reg24_t pc;
   char t[256];
   char* s = output;

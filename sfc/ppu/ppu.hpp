@@ -6,6 +6,12 @@ struct PPU : Thread, public PPUcounter {
   enum : bool { Threaded = true };
   alwaysinline void step(unsigned clocks);
   alwaysinline void synchronize_cpu();
+  void set_render_thread_mode(unsigned) {}
+  void drain_render() {}
+  bool render_thread_active() const { return false; }
+  void set_ppu_fast(bool) {}
+  void set_frameskip(unsigned) {}
+  uint32 framebuffer_hash() const { return 0; }
 
   void latch_counters();
   bool interlace() const;

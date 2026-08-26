@@ -1,4 +1,5 @@
-struct CPU : Processor::R65816, Thread, public PPUcounter {
+struct CPU : Processor::R65816<CPU>, Thread, public PPUcounter {
+  friend struct Processor::R65816<CPU>;
   uint8 wram[128 * 1024];
 
   enum : bool { Threaded = true };

@@ -49,6 +49,7 @@ void System::serialize(serializer& s) {
 }
 
 void System::serialize_all(serializer& s) {
+  ppu.drain_render();
   cartridge.serialize(s);
   system.serialize(s);
   random.serialize(s);

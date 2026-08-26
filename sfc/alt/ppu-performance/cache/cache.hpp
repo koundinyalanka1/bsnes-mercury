@@ -8,7 +8,9 @@ struct Cache {
   uint8* tile(unsigned bpp, unsigned tile);
 
   void serialize(serializer&);
+  void invalidate();
   Cache(PPU& self);
+  ~Cache();
 
   PPU& self;
   friend class PPU;

@@ -328,3 +328,5 @@ void SA1::reset() {
 }
 
 }
+
+#include <processor/r65816/r65816-impl.inc>

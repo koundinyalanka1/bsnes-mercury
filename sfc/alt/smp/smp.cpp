@@ -1,5 +1,3 @@
-#define CYCLE_ACCURATE
-
 #include <sfc/sfc.hpp>
 
 #define SMP_CPP

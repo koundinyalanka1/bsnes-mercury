@@ -51,7 +51,7 @@ bool PPU::Sprite::on_scanline(unsigned sprite) {
   return false;
 }
 
-void PPU::Sprite::render() {
+void PPU::Sprite::evaluate() {
   if(list_valid == false) {
     list_valid = true;
     for(unsigned i = 0; i < 128; i++) {
@@ -72,7 +72,6 @@ void PPU::Sprite::render() {
 
   unsigned itemcount = 0;
   unsigned tilecount = 0;
-  memset(output.priority, 0xff, 256);
   memset(itemlist, 0xff, 32);
   for(unsigned i = 0; i < 34; i++) tilelist[i].tile = 0xffff;
 
@@ -136,14 +135,28 @@ void PPU::Sprite::render() {
 
   regs.time_over |= (tilecount > 34);
   regs.range_over |= (itemcount > 32);
+}
 
-  if(regs.main_enable == false && regs.sub_enable == false) return;
+void PPU::Sprite::plot() {
+  const auto& r = self.render_src ? self.render_src->sprite_regs : regs;
+  const TileList* tiles = self.render_src ? self.render_src->tilelist : tilelist;
+  const bool pri0 = self.render_src ? self.render_src->sprite_priority0_enable : priority0_enable;
+  const bool pri1 = self.render_src ? self.render_src->sprite_priority1_enable : priority1_enable;
+  const bool pri2 = self.render_src ? self.render_src->sprite_priority2_enable : priority2_enable;
+  const bool pri3 = self.render_src ? self.render_src->sprite_priority3_enable : priority3_enable;
+
+  bool plot_sub = r.sub_enable;
+  if(plot_sub && self.can_skip_sub_screen()) plot_sub = false;
+
+  if(r.main_enable == false && plot_sub == false) return;
+
+  memset(output.priority, 0xff, 256);
 
   for(unsigned i = 0; i < 34; i++) {
-    if(tilelist[i].tile == 0xffff) continue;
+    if(tiles[i].tile == 0xffff) continue;
 
-    auto& t = tilelist[i];
-    uint8* tiledata = self.cache.tile_4bpp(t.tile);
+    auto& t = tiles[i];
+    uint8* tiledata = self.render_cache().tile_4bpp(t.tile);
     tiledata += (t.y & 7) << 3;
     unsigned sx = t.x;
     for(unsigned x = 0; x < 8; x++) {
@@ -160,13 +173,13 @@ void PPU::Sprite::render() {
     }
   }
 
-  if(regs.main_enable) window.render(0);
-  if(regs.sub_enable) window.render(1);
+  if(r.main_enable) window.render(0);
+  if(plot_sub) window.render(1);
 
-  unsigned priority0 = (priority0_enable ? regs.priority0 : 0);
-  unsigned priority1 = (priority1_enable ? regs.priority1 : 0);
-  unsigned priority2 = (priority2_enable ? regs.priority2 : 0);
-  unsigned priority3 = (priority3_enable ? regs.priority3 : 0);
+  unsigned priority0 = (pri0 ? r.priority0 : 0);
+  unsigned priority1 = (pri1 ? r.priority1 : 0);
+  unsigned priority2 = (pri2 ? r.priority2 : 0);
+  unsigned priority3 = (pri3 ? r.priority3 : 0);
   if(priority0 + priority1 + priority2 + priority3 == 0) return;
   const unsigned priority_table[] = { priority0, priority1, priority2, priority3 };
 
@@ -175,9 +188,14 @@ void PPU::Sprite::render() {
     unsigned priority = priority_table[output.priority[x]];
     unsigned palette = output.palette[x];
     unsigned color = self.screen.get_palette(output.palette[x]);
-    if(regs.main_enable && !window.main[x]) self.screen.output.plot_main(x, color, priority, 4 + (palette < 192));
-    if(regs.sub_enable && !window.sub[x]) self.screen.output.plot_sub(x, color, priority, 4 + (palette < 192));
+    if(r.main_enable && !window.main[x]) self.screen.output.plot_main(x, color, priority, 4 + (palette < 192));
+    if(plot_sub && !window.sub[x]) self.screen.output.plot_sub(x, color, priority, 4 + (palette < 192));
   }
+}
+
+void PPU::Sprite::render() {
+  evaluate();
+  plot();
 }
 
 PPU::Sprite::Sprite(PPU& self) : self(self) {

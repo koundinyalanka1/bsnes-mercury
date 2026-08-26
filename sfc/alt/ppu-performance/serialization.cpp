@@ -13,6 +13,10 @@ void PPUcounter::serialize(serializer& s) {
 }
 
 void PPU::serialize(serializer& s) {
+  drain_render();
+  mark_vram_dirty();
+  worker_cache.invalidate();
+  worker_cache_gen = ~0u;
   Thread::serialize(s);
   PPUcounter::serialize(s);
 

@@ -1,4 +1,5 @@
-struct SA1 : Processor::R65816, public Coprocessor {
+struct SA1 : Processor::R65816<SA1>, public Coprocessor {
+  friend struct Processor::R65816<SA1>;
   MappedRAM rom;
   MappedRAM iram;
   MappedRAM bwram;

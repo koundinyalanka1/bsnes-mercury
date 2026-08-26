@@ -7,6 +7,7 @@ class Background {
   bool priority0_enable;
   bool priority1_enable;
 
+public:
   struct Regs {
     unsigned mode;
     unsigned priority0;
@@ -26,6 +27,7 @@ class Background {
     bool sub_enable;
   } regs;
 
+private:
   uint16 **mosaic_table;
 
   const unsigned id;

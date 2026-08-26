@@ -181,3 +181,5 @@ CPU::~CPU() {
 }
 
 }
+
+#include <processor/r65816/r65816-impl.inc>

@@ -16,7 +16,6 @@ SOURCES_CXX += \
 					$(CORE_DIR)/processor/gsu/gsu.cpp \
 					$(CORE_DIR)/processor/hg51b/hg51b.cpp \
 					$(CORE_DIR)/processor/lr35902/lr35902.cpp \
-					$(CORE_DIR)/processor/r65816/r65816.cpp \
 					$(CORE_DIR)/processor/spc700/spc700.cpp \
 					$(CORE_DIR)/processor/upd96050/upd96050.cpp \
 					$(GB_DIR)/interface/interface.cpp \

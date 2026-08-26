@@ -1,4 +1,5 @@
-struct CPU : Processor::R65816, Thread, public PPUcounter {
+struct CPU : Processor::R65816<CPU>, Thread, public PPUcounter {
+  friend struct Processor::R65816<CPU>;
   uint8 wram[128 * 1024];
 
   enum : bool { Threaded = true };
@@ -17,9 +18,9 @@ struct CPU : Processor::R65816, Thread, public PPUcounter {
   uint8 mmio_read(unsigned addr);
   void mmio_write(unsigned addr, uint8 data);
 
-  void op_io();
-  uint8 op_read(unsigned addr);
-  void op_write(unsigned addr, uint8 data);
+  alwaysinline void op_io();
+  alwaysinline uint8 op_read(unsigned addr);
+  alwaysinline void op_write(unsigned addr, uint8 data);
 
   void enter();
   void enable();

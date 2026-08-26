@@ -4,6 +4,7 @@ class Sprite {
   bool priority2_enable;
   bool priority3_enable;
 
+public:
   struct Regs {
     unsigned priority0;
     unsigned priority1;
@@ -24,6 +25,7 @@ class Sprite {
     bool range_over;
   } regs;
 
+private:
   struct List {
     unsigned width;
     unsigned height;
@@ -40,6 +42,7 @@ class Sprite {
   bool list_valid;
 
   uint8 itemlist[32];
+public:
   struct TileList {
     unsigned x;
     unsigned y;
@@ -49,6 +52,7 @@ class Sprite {
     bool hflip;
   } tilelist[34];
 
+private:
   struct Output {
     uint8 palette[256];
     uint8 priority[256];
@@ -61,6 +65,8 @@ class Sprite {
   void address_reset();
   void set_first();
   alwaysinline bool on_scanline(unsigned sprite);
+  void evaluate();
+  void plot();
   void render();
 
   void serialize(serializer&);

@@ -12,6 +12,7 @@ PPU ppu;
 #include "sprite/sprite.cpp"
 #include "screen/screen.cpp"
 #include "serialization.cpp"
+#include "render-thread.cpp"
 
 void PPU::step(unsigned clocks) {
   clock += clocks;
@@ -50,20 +51,31 @@ void PPU::add_clocks(unsigned clocks) {
   synchronize_cpu();
 }
 
-void PPU::render_scanline() {
-  if(display.framecounter) return;  //skip this frame?
-  bg1.scanline();
-  bg2.scanline();
-  bg3.scanline();
-  bg4.scanline();
+void PPU::render_scanline_inline() {
   if(regs.display_disable) return screen.render_black();
   screen.scanline();
   bg1.render();
   bg2.render();
   bg3.render();
   bg4.render();
-  sprite.render();
+  sprite.plot();
   screen.render();
+}
+
+void PPU::render_scanline() {
+  if(display.framecounter) return;  //skip this frame?
+  bg1.scanline();
+  bg2.scanline();
+  bg3.scanline();
+  bg4.scanline();
+  sprite.evaluate();
+  if(!render_thread_running) {
+    render_scanline_inline();
+    return;
+  }
+  LineJob job;
+  capture_line_job(job);
+  enqueue_line_job(job);
 }
 
 void PPU::scanline() {
@@ -90,13 +102,18 @@ void PPU::enable() {
 }
 
 void PPU::power() {
+  drain_render();
   for(auto& n : vram) n = 0;
   for(auto& n : oam) n = 0;
   for(auto& n : cgram) n = 0;
+  worker_cache.invalidate();
+  worker_cache_gen = ~0u;
+  mark_vram_dirty();
   reset();
 }
 
 void PPU::reset() {
+  drain_render();
   create(Enter, system.cpu_frequency());
   PPUcounter::reset();
   memset(surface, 0, 512 * 512 * sizeof(uint32));
@@ -127,8 +144,23 @@ void PPU::set_frameskip(unsigned frameskip) {
   display.framecounter = 0;
 }
 
+uint32 PPU::framebuffer_hash() const {
+  uint32 h = 2166136261u;
+  unsigned height = display.height ? display.height : 224;
+  unsigned width = display.width ? display.width : 256;
+  for(unsigned y = 0; y < height; y++) {
+    const uint32* row = output + y * 1024;
+    for(unsigned x = 0; x < width; x++) {
+      h ^= row[x] + y;
+      h *= 16777619u;
+    }
+  }
+  return h;
+}
+
 PPU::PPU() :
 cache(*this),
+worker_cache(*this),
 bg1(*this, Background::ID::BG1),
 bg2(*this, Background::ID::BG2),
 bg3(*this, Background::ID::BG3),
@@ -141,10 +173,28 @@ screen(*this) {
   display.height = 224;
   display.frameskip = 0;
   display.framecounter = 0;
+
+  ppu_fast_paths = true;
+  render_src = nullptr;
+  render_thread_mode = RenderThreadAuto;
+  render_thread_running = false;
+  render_thread_stop = false;
+  worker_cache_gen = 0;
+  vram_slot_current = -1;
+  vram_dirty = true;
+  vram_gen = 0;
+  job_read = job_write = job_count = jobs_busy = 0;
+  for(unsigned i = 0; i < VramSlots; i++) {
+    vram_slot[i] = new uint8[64 * 1024]();
+    vram_slot_ref[i] = 0;
+  }
+  set_render_thread_mode(RenderThreadAuto);
 }
 
 PPU::~PPU() {
+  stop_render_thread();
   delete[] surface;
+  for(unsigned i = 0; i < VramSlots; i++) delete[] vram_slot[i];
 }
 
 }
