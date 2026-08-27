@@ -1,5 +1,14 @@
 #ifdef PPU_CPP
 
+#if defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+#if defined(__ANDROID__)
+#include <sys/syscall.h>
+#endif
+#endif
+
 void PPU::snap_layer_window(LayerWindowSnap& d, const LayerWindow& s) {
   d.one_enable = s.one_enable;
   d.one_invert = s.one_invert;
@@ -40,6 +49,44 @@ bool PPU::render_thread_active() const {
   return render_thread_running;
 }
 
+int PPU::render_thread_cpu() const {
+  return render_thread_affinity_cpu;
+}
+
+bool PPU::pin_worker_off_caller() {
+  unsigned cores = std::thread::hardware_concurrency();
+  if(cores < 2 || !render_thread.joinable()) {
+    render_thread_affinity_cpu = -1;
+    return false;
+  }
+
+#if defined(__linux__)
+  int caller = sched_getcpu();
+  if(caller < 0) caller = 0;
+  int worker = (caller + 1) % (int)cores;
+  cpu_set_t set;
+  CPU_ZERO(&set);
+  CPU_SET(worker, &set);
+#if defined(__ANDROID__)
+  pid_t tid = pthread_gettid_np(render_thread.native_handle());
+  if(tid <= 0 || sched_setaffinity((int)tid, sizeof(set), &set) != 0) {
+    render_thread_affinity_cpu = -2;
+    return false;
+  }
+#else
+  if(pthread_setaffinity_np(render_thread.native_handle(), sizeof(set), &set) != 0) {
+    render_thread_affinity_cpu = -2;
+    return false;
+  }
+#endif
+  render_thread_affinity_cpu = worker;
+  return true;
+#else
+  render_thread_affinity_cpu = -1;
+  return true;
+#endif
+}
+
 void PPU::set_render_thread_mode(unsigned mode) {
   render_thread_mode = mode;
   bool want = false;
@@ -50,8 +97,19 @@ void PPU::set_render_thread_mode(unsigned mode) {
     want = cores > 1;
   }
 
-  if(want) start_render_thread();
-  else stop_render_thread();
+  if(want) {
+    start_render_thread();
+    if(render_thread_running) {
+      bool pinned = pin_worker_off_caller();
+#if defined(__ANDROID__)
+      if(mode == RenderThreadAuto && !pinned) stop_render_thread();
+#else
+      (void)pinned;
+#endif
+    }
+  } else {
+    stop_render_thread();
+  }
 }
 
 void PPU::mark_vram_dirty() {
@@ -100,11 +158,13 @@ void PPU::start_render_thread() {
   if(render_thread_running) return;
   render_thread_stop = false;
   job_read = job_write = job_count = jobs_busy = 0;
+  render_thread_affinity_cpu = -1;
   try {
     render_thread = std::thread(&PPU::worker_loop, this);
     render_thread_running = true;
   } catch(...) {
     render_thread_running = false;
+    render_thread_affinity_cpu = -1;
   }
 }
 

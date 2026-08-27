@@ -94,6 +94,8 @@ public:
 	sample_t* extra()               { return m.extra; }
 	sample_t const* out_pos() const { return m.out; }
 	void disable_surround( bool ) { } // not supported
+	void set_fast( bool enable ) { fast_mode = enable; }
+	bool fast() const { return fast_mode; }
 public:
 	BLARGG_DISABLE_NOTHROW
 	
@@ -186,6 +188,7 @@ private:
 		sample_t extra [extra_size];
 	};
 	state_t m;
+	bool fast_mode = false;
 	
 	void init_counter();
 	void run_counters();

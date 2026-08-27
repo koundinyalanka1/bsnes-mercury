@@ -14,6 +14,7 @@ struct DSP : Thread {
   void reset();
 
   void channel_enable(unsigned channel, bool enable);
+  void set_fast(bool enable) { spc_dsp.set_fast(enable); }
 
   void serialize(serializer&);
   DSP();

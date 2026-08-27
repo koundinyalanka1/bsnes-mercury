@@ -1,5 +1,7 @@
 #include "libretro.h"
 #include <chrono>
+#include <cstring>
+#include <thread>
 #include <sfc/sfc.hpp>
 #include <nall/stream/mmap.hpp>
 #include <nall/stream/file.hpp>
@@ -99,6 +101,14 @@ struct Callbacks : Emulator::Interface::Bind {
   unsigned short region_mode;
   unsigned short aspect_ratio_mode;
   bool manifest;
+  int speed_profile;      // 0 auto, 1 full, 2 balanced, 3 fast
+  int speed_step;         // 0 full, 1 balanced, 2 fast (auto ladder)
+  int ppu_thread_user;    // 0 auto, 1 enabled, 2 disabled
+  bool ppu_fast_user;
+  int64_t run_ewma_ns;
+  unsigned over_budget;
+  unsigned under_budget;
+  bool logged_ppu_thread;
 
   bool load_request_error;
   const uint8_t *rom_data;
@@ -517,6 +527,7 @@ void retro_set_environment(retro_environment_t environ_cb)
       { "bsnes_perf_stats", "Log retro_run slice times; disabled|enabled" },
       { "bsnes_ppu_fast", "Fast PPU paths; enabled|disabled" },
       { "bsnes_frameskip", "PPU frameskip (CPU still runs); 0|1|2|3" },
+      { "bsnes_speed_profile", "Speed profile; auto|full|balanced|fast" },
       { "bsnes_cpu_jit", "65816 JIT (interpreter if no backend); auto|disabled" },
 #ifdef EXPERIMENTAL_FEATURES
       { "bsnes_sgb_core", "Super Game Boy core; Internal|Gambatte" },
@@ -597,6 +608,63 @@ void retro_set_environment(retro_environment_t environ_cb)
    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 }
 
+static int64_t frame_budget_ns() {
+  if(SuperFamicom::cartridge.loaded() &&
+     SuperFamicom::system.region() == SuperFamicom::System::Region::PAL)
+    return (int64_t)(1000000000.0 / VIDEO_REFRESH_RATE_PAL);
+  return (int64_t)(1000000000.0 / VIDEO_REFRESH_RATE_NTSC);
+}
+
+static void apply_speed_step() {
+  unsigned skip = 0;
+  bool dsp_fast = false;
+  unsigned ppu_mode = (unsigned)core_bind.ppu_thread_user;
+
+  if(core_bind.speed_profile == 2) core_bind.speed_step = 1;
+  else if(core_bind.speed_profile == 3) core_bind.speed_step = 2;
+  else if(core_bind.speed_profile == 1) core_bind.speed_step = 0;
+
+  if(core_bind.speed_step >= 1) { skip = 1; dsp_fast = true; }
+  if(core_bind.speed_step >= 2) {
+    skip = 2;
+    if(ppu_mode == 0) ppu_mode = 2;
+  }
+
+  SuperFamicom::ppu.set_frameskip(skip);
+  SuperFamicom::ppu.set_ppu_fast(core_bind.ppu_fast_user);
+  SuperFamicom::dsp.set_fast(dsp_fast);
+  SuperFamicom::ppu.set_render_thread_mode(ppu_mode);
+}
+
+static void append_ra_descriptor(void* ptr, size_t len, size_t start) {
+  if(!ptr || len == 0) return;
+  retro_memory_descriptor desc;
+  memset(&desc, 0, sizeof(desc));
+  desc.ptr = ptr;
+  desc.start = start;
+  desc.select = 0;
+  desc.disconnect = 0;
+  desc.len = len;
+  SuperFamicom::bus.libretro_mem_map.append(desc);
+}
+
+static void publish_memory_maps() {
+  append_ra_descriptor(core_bind.sram, core_bind.sram_size, 0x1000000);
+  unsigned iram_size = 0;
+  if(SuperFamicom::cartridge.has_sa1() && SuperFamicom::sa1.iram.data()) {
+    iram_size = (unsigned)SuperFamicom::sa1.iram.size();
+    append_ra_descriptor(SuperFamicom::sa1.iram.data(), iram_size, 0x1080000);
+  }
+  retro_memory_map map = {
+    SuperFamicom::bus.libretro_mem_map.data(),
+    SuperFamicom::bus.libretro_mem_map.size()
+  };
+  core_bind.penviron(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, (void*)&map);
+  output(RETRO_LOG_WARN, "RA mmap: wram=131072 sram=%u iram=%u desc=%u\n",
+    core_bind.sram_size, iram_size,
+    (unsigned)SuperFamicom::bus.libretro_mem_map.size());
+}
+
 static void update_variables(void) {
    if (SuperFamicom::cartridge.has_superfx()) {
       const char * speed=read_opt("bsnes_superfx_overclock", "100%");
@@ -646,18 +714,29 @@ static void update_variables(void) {
    }
 
    const char * ppu_thread_opt = get_var("bsnes_ppu_thread", "auto");
-   unsigned ppu_thread_mode = 0;
-   if (!strcmp(ppu_thread_opt, "enabled")) ppu_thread_mode = 1;
-   else if (!strcmp(ppu_thread_opt, "disabled")) ppu_thread_mode = 2;
-   SuperFamicom::ppu.set_render_thread_mode(ppu_thread_mode);
+   core_bind.ppu_thread_user = 0;
+   if(!strcmp(ppu_thread_opt, "enabled")) core_bind.ppu_thread_user = 1;
+   else if(!strcmp(ppu_thread_opt, "disabled")) core_bind.ppu_thread_user = 2;
 
    const char * ppu_fast_opt = get_var("bsnes_ppu_fast", "enabled");
-   SuperFamicom::ppu.set_ppu_fast(strcmp(ppu_fast_opt, "disabled") != 0);
+   core_bind.ppu_fast_user = strcmp(ppu_fast_opt, "disabled") != 0;
 
-   unsigned frameskip = (unsigned)strtoul(get_var("bsnes_frameskip", "0"), NULL, 10);
-   SuperFamicom::ppu.set_frameskip(frameskip);
+   const char * speed_opt = get_var("bsnes_speed_profile", "auto");
+   int prev_profile = core_bind.speed_profile;
+   core_bind.speed_profile = 0;
+   if(!strcmp(speed_opt, "full")) core_bind.speed_profile = 1;
+   else if(!strcmp(speed_opt, "balanced")) core_bind.speed_profile = 2;
+   else if(!strcmp(speed_opt, "fast")) core_bind.speed_profile = 3;
+   if(core_bind.speed_profile != 0 && core_bind.speed_profile != prev_profile)
+     core_bind.over_budget = core_bind.under_budget = 0;
+
+   unsigned user_frameskip = (unsigned)strtoul(get_var("bsnes_frameskip", "0"), NULL, 10);
 
    core_bind.perf_stats = !strcmp(get_var("bsnes_perf_stats", "disabled"), "enabled");
+
+   apply_speed_step();
+   if(core_bind.speed_profile == 1 && user_frameskip > 0)
+     SuperFamicom::ppu.set_frameskip(user_frameskip);
 
    output(RETRO_LOG_DEBUG, "superfx_freq_orig: %u\n", superfx_freq_orig);
    output(RETRO_LOG_DEBUG, "SuperFamicom::superfx.frequency: %u\n", SuperFamicom::superfx.frequency);
@@ -678,6 +757,14 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 }
 
 void retro_init(void) {
+  core_bind.speed_profile = 0;
+  core_bind.speed_step = 0;
+  core_bind.ppu_thread_user = 0;
+  core_bind.ppu_fast_user = true;
+  core_bind.run_ewma_ns = 0;
+  core_bind.over_budget = 0;
+  core_bind.under_budget = 0;
+  core_bind.logged_ppu_thread = false;
   update_variables();
   SuperFamicom::interface = &core_interface;
   GameBoy::interface = &core_gb_interface;
@@ -710,15 +797,57 @@ void retro_run(void) {
   if (core_bind.penviron(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     update_variables();
   using clock = std::chrono::steady_clock;
-  clock::time_point t0, t1;
-  if (core_bind.perf_stats) t0 = clock::now();
+  clock::time_point t0 = clock::now();
   SuperFamicom::system.run();
   SuperFamicom::ppu.drain_render();
+  clock::time_point t1 = clock::now();
+  int64_t this_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+  if(core_bind.run_ewma_ns == 0) core_bind.run_ewma_ns = this_ns;
+  else core_bind.run_ewma_ns += (this_ns - core_bind.run_ewma_ns) >> 3;
+
+  if(!core_bind.logged_ppu_thread) {
+    core_bind.logged_ppu_thread = true;
+    output(RETRO_LOG_WARN, "ppu_thread=%d cores=%u affinity=%d\n",
+      SuperFamicom::ppu.render_thread_active() ? 1 : 0,
+      (unsigned)std::thread::hardware_concurrency(),
+      SuperFamicom::ppu.render_thread_cpu());
+  }
+
+  if(core_bind.speed_profile == 0) {
+    int64_t budget = frame_budget_ns();
+    if(core_bind.run_ewma_ns > budget - 400000LL) {
+      core_bind.over_budget++;
+      core_bind.under_budget = 0;
+      if(core_bind.over_budget >= 120 && core_bind.speed_step < 2) {
+        core_bind.speed_step++;
+        core_bind.over_budget = 0;
+        apply_speed_step();
+        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u dsp_fast=%d\n",
+          core_bind.speed_step, core_bind.run_ewma_ns / 1e6,
+          core_bind.speed_step >= 2 ? 2u : (core_bind.speed_step >= 1 ? 1u : 0u),
+          core_bind.speed_step >= 1 ? 1 : 0);
+      }
+    } else if(core_bind.run_ewma_ns < budget - 2500000LL) {
+      core_bind.under_budget++;
+      core_bind.over_budget = 0;
+      if(core_bind.under_budget >= 300 && core_bind.speed_step > 0) {
+        core_bind.speed_step--;
+        core_bind.under_budget = 0;
+        apply_speed_step();
+        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u dsp_fast=%d\n",
+          core_bind.speed_step, core_bind.run_ewma_ns / 1e6,
+          core_bind.speed_step >= 2 ? 2u : (core_bind.speed_step >= 1 ? 1u : 0u),
+          core_bind.speed_step >= 1 ? 1 : 0);
+      }
+    } else {
+      core_bind.over_budget = 0;
+      core_bind.under_budget = 0;
+    }
+  }
+
   if (core_bind.perf_stats) {
-    t1 = clock::now();
-    double run_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
     output(RETRO_LOG_INFO, "[perf] retro_run %.2f ms ppu_thread=%d cores=%u fb_hash=%08x\n",
-      run_ms, SuperFamicom::ppu.render_thread_active() ? 1 : 0,
+      this_ns / 1e6, SuperFamicom::ppu.render_thread_active() ? 1 : 0,
       (unsigned)std::thread::hardware_concurrency(),
       SuperFamicom::ppu.framebuffer_hash());
   }
@@ -1203,11 +1332,15 @@ bool retro_load_game(const struct retro_game_info *info) {
   bool ret=snes_load_cartridge_normal(core_bind.manifest ? manifest.data() : info->meta, data, size);
   if (ret) {
     SuperFamicom::bus.libretro_mem_map.reverse();
-    retro_memory_map map={SuperFamicom::bus.libretro_mem_map.data(), SuperFamicom::bus.libretro_mem_map.size()};
-    core_bind.penviron(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, (void*)&map);
+    publish_memory_maps();
     
     if (SuperFamicom::cartridge.has_superfx())
       superfx_freq_orig=SuperFamicom::superfx.frequency;
+    core_bind.logged_ppu_thread = false;
+    core_bind.run_ewma_ns = 0;
+    core_bind.speed_step = (core_bind.speed_profile == 0) ? 0 : core_bind.speed_step;
+    core_bind.over_budget = core_bind.under_budget = 0;
+    apply_speed_step();
   }
   
   return ret;
@@ -1243,52 +1376,70 @@ bool retro_load_game_special(unsigned game_type,
       core_bind.basename = "./";
   }
 
+  bool ret = false;
   switch (game_type) {
      case RETRO_GAME_TYPE_BSX:
         core_interface.mode = SuperFamicomCartridge::ModeBsx;
-        return num_info == 2 && snes_load_cartridge_bsx(info[0].meta, data, size,
+        ret = num_info == 2 && snes_load_cartridge_bsx(info[0].meta, data, size,
               info[1].meta, (const uint8_t*)info[1].data, info[1].size);
+        break;
 
      case RETRO_GAME_TYPE_BSX | 0x1000:
         core_interface.mode = SuperFamicomCartridge::ModeBsx;
-        return num_info == 2 && snes_load_cartridge_bsx(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
+        ret = num_info == 2 && snes_load_cartridge_bsx(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
               info[0].meta, (const uint8_t*)info[0].data, info[0].size);
+        break;
 
      case RETRO_GAME_TYPE_BSX_SLOTTED:
         core_interface.mode = SuperFamicomCartridge::ModeBsxSlotted;
-        return num_info == 2 && snes_load_cartridge_bsx_slotted(info[0].meta, data, size,
+        ret = num_info == 2 && snes_load_cartridge_bsx_slotted(info[0].meta, data, size,
               info[1].meta, (const uint8_t*)info[1].data, info[1].size);
+        break;
 
      case RETRO_GAME_TYPE_BSX_SLOTTED | 0x1000:
         core_interface.mode = SuperFamicomCartridge::ModeBsxSlotted;
-        return num_info == 2 && snes_load_cartridge_bsx(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
+        ret = num_info == 2 && snes_load_cartridge_bsx(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
               info[0].meta, (const uint8_t*)info[0].data, info[0].size);
+        break;
 
      case RETRO_GAME_TYPE_SUPER_GAME_BOY:
         core_interface.mode = SuperFamicomCartridge::ModeSuperGameBoy;
-        return num_info == 2 && snes_load_cartridge_super_game_boy(info[0].meta, data, size,
+        ret = num_info == 2 && snes_load_cartridge_super_game_boy(info[0].meta, data, size,
               info[1].meta, (const uint8_t*)info[1].data, info[1].size);
+        break;
 
      case RETRO_GAME_TYPE_SUPER_GAME_BOY | 0x1000:
         core_interface.mode = SuperFamicomCartridge::ModeSuperGameBoy;
-        return num_info == 2 && snes_load_cartridge_super_game_boy(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
+        ret = num_info == 2 && snes_load_cartridge_super_game_boy(info[1].meta, (const uint8_t*)info[1].data, info[1].size,
               info[0].meta, (const uint8_t*)info[0].data, info[0].size);
+        break;
 
      case RETRO_GAME_TYPE_SUFAMI_TURBO:
         core_interface.mode = SuperFamicomCartridge::ModeSufamiTurbo;
-        return num_info == 3 && snes_load_cartridge_sufami_turbo(info[0].meta, (const uint8_t*)info[0].data, info[0].size,
+        ret = num_info == 3 && snes_load_cartridge_sufami_turbo(info[0].meta, (const uint8_t*)info[0].data, info[0].size,
               info[1].meta, (const uint8_t*)info[1].data, info[1].size,
               info[2].meta, (const uint8_t*)info[2].data, info[2].size);
+        break;
 
      case RETRO_GAME_TYPE_SUFAMI_TURBO | 0x1000:
         core_interface.mode = SuperFamicomCartridge::ModeSufamiTurbo;
-        return num_info == 3 && snes_load_cartridge_sufami_turbo(info[2].meta, (const uint8_t*)info[2].data, info[2].size,
+        ret = num_info == 3 && snes_load_cartridge_sufami_turbo(info[2].meta, (const uint8_t*)info[2].data, info[2].size,
               info[0].meta, (const uint8_t*)info[0].data, info[0].size,
               info[1].meta, (const uint8_t*)info[1].data, info[1].size);
+        break;
 
      default:
         return false;
   }
+  if(ret) {
+    SuperFamicom::bus.libretro_mem_map.reverse();
+    publish_memory_maps();
+    core_bind.logged_ppu_thread = false;
+    core_bind.run_ewma_ns = 0;
+    core_bind.over_budget = core_bind.under_budget = 0;
+    apply_speed_step();
+  }
+  return ret;
 }
 
 void retro_unload_game(void) {

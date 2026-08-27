@@ -14,6 +14,7 @@ struct DSP : Thread {
   void serialize(serializer&);
   DSP();
   ~DSP();
+  void set_fast(bool) {}
 
 privileged:
   #include "moduloarray.hpp"

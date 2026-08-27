@@ -92,3 +92,4 @@ std::thread render_thread;
 std::mutex render_mutex;
 std::condition_variable render_cv_fill;
 std::condition_variable render_cv_empty;
+int render_thread_affinity_cpu;

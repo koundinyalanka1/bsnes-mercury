@@ -9,6 +9,7 @@ struct PPU : Thread, public PPUcounter {
   void set_render_thread_mode(unsigned) {}
   void drain_render() {}
   bool render_thread_active() const { return false; }
+  int render_thread_cpu() const { return -1; }
   void set_ppu_fast(bool) {}
   void set_frameskip(unsigned) {}
   uint32 framebuffer_hash() const { return 0; }

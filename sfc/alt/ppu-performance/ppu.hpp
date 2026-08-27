@@ -24,6 +24,7 @@ struct PPU : Thread, public PPUcounter {
   void set_render_thread_mode(unsigned mode);
   void drain_render();
   bool render_thread_active() const;
+  int render_thread_cpu() const;
   void set_ppu_fast(bool enable) { ppu_fast_paths = enable; }
   uint32 framebuffer_hash() const;
 
@@ -76,6 +77,7 @@ private:
   void release_vram_slot(unsigned slot);
   void start_render_thread();
   void stop_render_thread();
+  bool pin_worker_off_caller();
   void enqueue_line_job(const LineJob&);
   void worker_loop();
 

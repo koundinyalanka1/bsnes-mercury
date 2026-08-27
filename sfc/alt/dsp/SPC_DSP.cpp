@@ -137,19 +137,25 @@ static short const gauss [512] =
 
 inline int SPC_DSP::interpolate( voice_t const* v )
 {
-	// Make pointers into gaussian based on fractional position between samples
-	int offset = v->interp_pos >> 4 & 0xFF;
-	short const* fwd = gauss + 255 - offset;
-	short const* rev = gauss       + offset; // mirror left half of gaussian
-	
 	int const* in = &v->buf [(v->interp_pos >> 12) + v->buf_pos];
 	int out;
-	out  = (fwd [  0] * in [0]) >> 11;
-	out += (fwd [256] * in [1]) >> 11;
-	out += (rev [256] * in [2]) >> 11;
-	out = (int16_t) out;
-	out += (rev [  0] * in [3]) >> 11;
-	
+	if ( fast_mode )
+	{
+		int frac = v->interp_pos & 0xFFF;
+		out = in [1] + (int) (((in [2] - in [1]) * (long long) frac) >> 12);
+	}
+	else
+	{
+		// Make pointers into gaussian based on fractional position between samples
+		int offset = v->interp_pos >> 4 & 0xFF;
+		short const* fwd = gauss + 255 - offset;
+		short const* rev = gauss       + offset; // mirror left half of gaussian
+		out  = (fwd [  0] * in [0]) >> 11;
+		out += (fwd [256] * in [1]) >> 11;
+		out += (rev [256] * in [2]) >> 11;
+		out = (int16_t) out;
+		out += (rev [  0] * in [3]) >> 11;
+	}
 	CLAMP16( out );
 	out &= ~1;
 	return out;
@@ -617,6 +623,12 @@ ECHO_CLOCK( 22 )
 		m.echo_hist_pos = m.echo_hist;
 	
 	m.t_echo_ptr = (m.t_esa * 0x100 + m.echo_offset) & 0xFFFF;
+	if ( fast_mode )
+	{
+		m.t_echo_in [0] = 0;
+		m.t_echo_in [1] = 0;
+		return;
+	}
 	echo_read( 0 );
 	
 	// FIR (using l and r temporaries below helps compiler optimize)
@@ -628,6 +640,7 @@ ECHO_CLOCK( 22 )
 }
 ECHO_CLOCK( 23 )
 {
+	if ( fast_mode ) return;
 	int l = CALC_FIR( 1, 0 ) + CALC_FIR( 2, 0 );
 	int r = CALC_FIR( 1, 1 ) + CALC_FIR( 2, 1 );
 	
@@ -638,6 +651,7 @@ ECHO_CLOCK( 23 )
 }
 ECHO_CLOCK( 24 )
 {
+	if ( fast_mode ) return;
 	int l = CALC_FIR( 3, 0 ) + CALC_FIR( 4, 0 ) + CALC_FIR( 5, 0 );
 	int r = CALC_FIR( 3, 1 ) + CALC_FIR( 4, 1 ) + CALC_FIR( 5, 1 );
 	
@@ -646,6 +660,7 @@ ECHO_CLOCK( 24 )
 }
 ECHO_CLOCK( 25 )
 {
+	if ( fast_mode ) return;
 	int l = m.t_echo_in [0] + CALC_FIR( 6, 0 );
 	int r = m.t_echo_in [1] + CALC_FIR( 6, 1 );
 	
@@ -663,8 +678,9 @@ ECHO_CLOCK( 25 )
 }
 inline int SPC_DSP::echo_output( int ch )
 {
-	int out = (int16_t) ((m.t_main_out [ch] * (int8_t) REG(mvoll + ch * 0x10)) >> 7) +
-			(int16_t) ((m.t_echo_in [ch] * (int8_t) REG(evoll + ch * 0x10)) >> 7);
+	int out = (int16_t) ((m.t_main_out [ch] * (int8_t) REG(mvoll + ch * 0x10)) >> 7);
+	if ( !fast_mode )
+		out += (int16_t) ((m.t_echo_in [ch] * (int8_t) REG(evoll + ch * 0x10)) >> 7);
 	CLAMP16( out );
 	return out;
 }
@@ -819,6 +835,7 @@ void SPC_DSP::run( int clocks_remain )
 void SPC_DSP::init( void* ram_64k )
 {
 	m.ram = (uint8_t*) ram_64k;
+	fast_mode = false;
 	mute_voices( 0 );
 	disable_surround( false );
 	set_output( 0, 0 );

@@ -30,6 +30,10 @@ LOCAL_MODULE       := retro
 LOCAL_SRC_FILES    := $(SOURCES_CXX) $(SOURCES_C)
 LOCAL_CPPFLAGS     := -std=c++11 $(COREFLAGS)
 LOCAL_CFLAGS       := $(COREFLAGS)
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+  LOCAL_CFLAGS   += -mno-unaligned-access -mfpu=neon -ftree-vectorize
+  LOCAL_CPPFLAGS += -mno-unaligned-access -mfpu=neon -ftree-vectorize
+endif
 LOCAL_LDFLAGS      := -Wl,-version-script=$(CORE_DIR)/target-libretro/link.T -pthread
 LOCAL_LDLIBS       := -latomic
 LOCAL_CPP_FEATURES := exceptions rtti

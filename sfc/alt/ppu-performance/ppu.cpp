@@ -184,6 +184,7 @@ screen(*this) {
   vram_dirty = true;
   vram_gen = 0;
   job_read = job_write = job_count = jobs_busy = 0;
+  render_thread_affinity_cpu = -1;
   for(unsigned i = 0; i < VramSlots; i++) {
     vram_slot[i] = new uint8[64 * 1024]();
     vram_slot_ref[i] = 0;

@@ -69,6 +69,7 @@ void DSP::channel_enable(unsigned channel, bool enable) {
 
 DSP::DSP() {
   for(unsigned i = 0; i < 8; i++) channel_enabled[i] = true;
+  spc_dsp.set_fast(false);
 }
 
 }
