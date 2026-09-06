@@ -9,6 +9,10 @@ struct Cache {
 
   void serialize(serializer&);
   void invalidate();
+  //tiledata is claimed only by whichever renderer is live; see PPU::sync_cache_allocation.
+  //tilevalid is always allocated, so MMIO invalidation stays branch-free.
+  void allocate();
+  void release();
   Cache(PPU& self);
   ~Cache();
 

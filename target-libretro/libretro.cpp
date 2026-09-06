@@ -625,10 +625,10 @@ static void apply_speed_step() {
   else if(core_bind.speed_profile == 1) core_bind.speed_step = 0;
 
   if(core_bind.speed_step >= 1) { skip = 1; dsp_fast = true; }
-  if(core_bind.speed_step >= 2) {
-    skip = 2;
-    if(ppu_mode == 0) ppu_mode = 2;
-  }
+  //Keep the render thread on at the heaviest step: offloading rendering is most valuable
+  //precisely when the emulation thread is furthest over budget. Only an explicit user
+  //setting of "disabled" turns it off.
+  if(core_bind.speed_step >= 2) skip = 2;
 
   SuperFamicom::ppu.set_frameskip(skip);
   SuperFamicom::ppu.set_ppu_fast(core_bind.ppu_fast_user);

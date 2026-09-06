@@ -6,10 +6,25 @@ void PPU::Cache::invalidate() {
   memset(tilevalid[2], 0, 1024);
 }
 
+void PPU::Cache::allocate() {
+  if(tiledata[0]) return;
+  tiledata[0] = new uint8[262144]();
+  tiledata[1] = new uint8[131072]();
+  tiledata[2] = new uint8[ 65536]();
+  invalidate();
+}
+
+void PPU::Cache::release() {
+  if(!tiledata[0]) return;
+  delete[] tiledata[0]; tiledata[0] = nullptr;
+  delete[] tiledata[1]; tiledata[1] = nullptr;
+  delete[] tiledata[2]; tiledata[2] = nullptr;
+  //Nothing may report a cached tile once its backing store is gone.
+  invalidate();
+}
+
 PPU::Cache::~Cache() {
-  delete[] tiledata[0];
-  delete[] tiledata[1];
-  delete[] tiledata[2];
+  release();
   delete[] tilevalid[0];
   delete[] tilevalid[1];
   delete[] tilevalid[2];
@@ -133,9 +148,7 @@ uint8* PPU::Cache::tile(unsigned bpp, unsigned tile) {
 }
 
 PPU::Cache::Cache(PPU& self) : self(self) {
-  tiledata[0] = new uint8[262144]();
-  tiledata[1] = new uint8[131072]();
-  tiledata[2] = new uint8[ 65536]();
+  tiledata[0] = tiledata[1] = tiledata[2] = nullptr;
   tilevalid[0] = new uint8[ 4096]();
   tilevalid[1] = new uint8[ 2048]();
   tilevalid[2] = new uint8[ 1024]();

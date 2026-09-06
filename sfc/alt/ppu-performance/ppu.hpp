@@ -1,7 +1,9 @@
 struct PPU : Thread, public PPUcounter {
   uint8 vram[64 * 1024];
   uint8 oam[544];
-  uint8 cgram[512];
+  //Screen::get_palette reads this through a uint16*, so the alignment has to be guaranteed
+  //rather than incidental; ARM builds no longer pass -mno-unaligned-access to cover for it.
+  alignas(uint16) uint8 cgram[512];
 
   enum : bool { Threaded = true };
   alwaysinline void step(unsigned clocks);
@@ -78,7 +80,9 @@ private:
   void start_render_thread();
   void stop_render_thread();
   bool pin_worker_off_caller();
-  void enqueue_line_job(const LineJob&);
+  void wait_for_job_slot();
+  void publish_line_job();
+  void sync_cache_allocation();
   void worker_loop();
 
   alwaysinline uint8* vram_data() { return render_src ? render_src->vram : vram; }

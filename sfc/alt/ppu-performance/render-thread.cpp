@@ -154,10 +154,25 @@ void PPU::release_vram_slot(unsigned slot) {
   if(slot < VramSlots && vram_slot_ref[slot]) vram_slot_ref[slot]--;
 }
 
+//Only one tile cache is ever live: the worker renders from worker_cache while the render
+//thread runs, and render_scanline_inline() uses cache when it does not. The idle one drops
+//its 448KB of tiledata. tilevalid (7KB) stays allocated in both, because MMIO VRAM writes
+//and PPU::Cache::serialize poke it without knowing which renderer is active.
+void PPU::sync_cache_allocation() {
+  if(render_thread_running) {
+    worker_cache.allocate();
+    worker_cache_gen = ~0u;
+    cache.release();
+  } else {
+    cache.allocate();
+    worker_cache.release();
+  }
+}
+
 void PPU::start_render_thread() {
   if(render_thread_running) return;
   render_thread_stop = false;
-  job_read = job_write = job_count = jobs_busy = 0;
+  job_read = job_write = job_count = 0;
   render_thread_affinity_cpu = -1;
   try {
     render_thread = std::thread(&PPU::worker_loop, this);
@@ -166,6 +181,7 @@ void PPU::start_render_thread() {
     render_thread_running = false;
     render_thread_affinity_cpu = -1;
   }
+  sync_cache_allocation();
 }
 
 void PPU::stop_render_thread() {
@@ -178,53 +194,66 @@ void PPU::stop_render_thread() {
   if(render_thread.joinable()) render_thread.join();
   render_thread_running = false;
   render_src = nullptr;
-  job_read = job_write = job_count = jobs_busy = 0;
+  job_read = job_write = job_count = 0;
   for(unsigned i = 0; i < VramSlots; i++) vram_slot_ref[i] = 0;
+  sync_cache_allocation();
 }
 
 void PPU::drain_render() {
   if(!render_thread_running) return;
   std::unique_lock<std::mutex> lock(render_mutex);
-  while(jobs_busy) render_cv_empty.wait(lock);
+  while(job_count) render_cv_empty.wait(lock);
 }
 
-void PPU::enqueue_line_job(const LineJob& job) {
+//Block until jobs[job_write] is free. That slot sits outside the [job_read, job_read +
+//job_count) window the worker owns, so the caller can then fill it in place without the
+//lock; only the index handoff in publish_line_job() is synchronized.
+void PPU::wait_for_job_slot() {
   std::unique_lock<std::mutex> lock(render_mutex);
   while(job_count == JobSlots) render_cv_empty.wait(lock);
-  jobs[job_write] = job;
-  jobs[job_write].occupied = true;
-  job_write = (job_write + 1) % JobSlots;
-  job_count++;
-  jobs_busy++;
-  lock.unlock();
+}
+
+void PPU::publish_line_job() {
+  {
+    std::lock_guard<std::mutex> lock(render_mutex);
+    jobs[job_write].occupied = true;
+    job_write = (job_write + 1) % JobSlots;
+    job_count++;
+  }
   render_cv_fill.notify_one();
 }
 
 void PPU::worker_loop() {
   while(true) {
-    std::unique_lock<std::mutex> lock(render_mutex);
-    while(!job_count && !render_thread_stop) render_cv_fill.wait(lock);
-    if(!job_count && render_thread_stop) return;
-    LineJob job = jobs[job_read];
-    jobs[job_read].occupied = false;
-    job_read = (job_read + 1) % JobSlots;
-    job_count--;
-    lock.unlock();
-    render_cv_empty.notify_one();
+    unsigned slot;
+    {
+      std::unique_lock<std::mutex> lock(render_mutex);
+      while(!job_count && !render_thread_stop) render_cv_fill.wait(lock);
+      if(!job_count && render_thread_stop) return;
+      slot = job_read;
+    }
 
+    //Rendered in place: the slot stays counted in job_count until the line is finished,
+    //which is what keeps the producer from overwriting it.
+    LineJob& job = jobs[slot];
     apply_line_job(job);
     release_vram_slot(job.vram_slot);
 
     {
-      std::lock_guard<std::mutex> done(render_mutex);
-      if(jobs_busy) jobs_busy--;
+      std::lock_guard<std::mutex> lock(render_mutex);
+      job.occupied = false;
+      job_read = (job_read + 1) % JobSlots;
+      job_count--;
     }
-    render_cv_empty.notify_one();
+    //notify_all because both wait_for_job_slot() and drain_render() wait here on
+    //different predicates.
+    render_cv_empty.notify_all();
   }
 }
 
+//Every field below is assigned unconditionally, so there is nothing to pre-clear; the
+//caller passes the ring slot itself, which the worker then renders in place.
 void PPU::capture_line_job(LineJob& job) {
-  memset(&job, 0, sizeof(job));
   job.vram = acquire_vram_slot();
   job.vram_slot = (unsigned)vram_slot_current;
   job.vram_gen = vram_gen;

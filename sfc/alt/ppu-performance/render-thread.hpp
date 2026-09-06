@@ -39,7 +39,7 @@ struct LineJob {
   uint8* vram;
   unsigned vram_slot;
   unsigned vram_gen;
-  uint8 cgram[512];
+  alignas(uint16) uint8 cgram[512];
 
   unsigned vcounter;
   bool field;
@@ -75,7 +75,10 @@ bool render_thread_running;
 bool render_thread_stop;
 unsigned worker_cache_gen;
 
-enum : unsigned { VramSlots = 3, JobSlots = 2 };
+//JobSlots is 3 because the worker renders a job in place and holds its slot for the whole
+//scanline; with the old copy-out-then-render scheme two slots plus the worker's private copy
+//gave the same three lines of slack.
+enum : unsigned { VramSlots = 3, JobSlots = 3 };
 uint8* vram_slot[VramSlots];
 unsigned vram_slot_ref[VramSlots];
 int vram_slot_current;
@@ -85,8 +88,9 @@ unsigned vram_gen;
 LineJob jobs[JobSlots];
 unsigned job_read;
 unsigned job_write;
+//Counts jobs published but not yet finished rendering, so it serves as both the
+//queue-full predicate and the drain predicate.
 unsigned job_count;
-unsigned jobs_busy;
 
 std::thread render_thread;
 std::mutex render_mutex;

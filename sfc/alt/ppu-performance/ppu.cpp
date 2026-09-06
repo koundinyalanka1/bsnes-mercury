@@ -73,9 +73,11 @@ void PPU::render_scanline() {
     render_scanline_inline();
     return;
   }
-  LineJob job;
-  capture_line_job(job);
-  enqueue_line_job(job);
+  //Fill the ring slot directly rather than a stack copy: this removes a 1944-byte memset
+  //plus the two full-job memcpys that used to happen inside the mutex.
+  wait_for_job_slot();
+  capture_line_job(jobs[job_write]);
+  publish_line_job();
 }
 
 void PPU::scanline() {
@@ -183,13 +185,16 @@ screen(*this) {
   vram_slot_current = -1;
   vram_dirty = true;
   vram_gen = 0;
-  job_read = job_write = job_count = jobs_busy = 0;
+  job_read = job_write = job_count = 0;
   render_thread_affinity_cpu = -1;
   for(unsigned i = 0; i < VramSlots; i++) {
     vram_slot[i] = new uint8[64 * 1024]();
     vram_slot_ref[i] = 0;
   }
   set_render_thread_mode(RenderThreadAuto);
+  //Covers the case where the thread never started, so stop_render_thread() returned early
+  //and left neither cache holding its tiledata.
+  sync_cache_allocation();
 }
 
 PPU::~PPU() {
