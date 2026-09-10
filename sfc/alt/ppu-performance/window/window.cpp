@@ -1,10 +1,9 @@
 #ifdef PPU_CPP
 
 void PPU::LayerWindow::render(bool screen) {
-  bool one_enable_ = one_enable, one_invert_ = one_invert;
-  bool two_enable_ = two_enable, two_invert_ = two_invert;
-  unsigned mask_ = mask;
-  bool main_enable_ = main_enable, sub_enable_ = sub_enable;
+  bool one_enable_, one_invert_, two_enable_, two_invert_;
+  unsigned mask_;
+  bool main_enable_, sub_enable_;
   const auto& pregs = ppu.render_regs();
 
   if(ppu.render_src) {
@@ -14,12 +13,16 @@ void PPU::LayerWindow::render(bool screen) {
     else if(this == &ppu.bg3.window) s = &ppu.render_src->bg[2].window;
     else if(this == &ppu.bg4.window) s = &ppu.render_src->bg[3].window;
     else if(this == &ppu.sprite.window) s = &ppu.render_src->sprite_window;
-    if(s) {
-      one_enable_ = s->one_enable; one_invert_ = s->one_invert;
-      two_enable_ = s->two_enable; two_invert_ = s->two_invert;
-      mask_ = s->mask;
-      main_enable_ = s->main_enable; sub_enable_ = s->sub_enable;
-    }
+    assert(s);
+    one_enable_ = s->one_enable; one_invert_ = s->one_invert;
+    two_enable_ = s->two_enable; two_invert_ = s->two_invert;
+    mask_ = s->mask;
+    main_enable_ = s->main_enable; sub_enable_ = s->sub_enable;
+  } else {
+    one_enable_ = one_enable; one_invert_ = one_invert;
+    two_enable_ = two_enable; two_invert_ = two_invert;
+    mask_ = mask;
+    main_enable_ = main_enable; sub_enable_ = sub_enable;
   }
 
   uint8* output;
@@ -73,15 +76,18 @@ void PPU::LayerWindow::render(bool screen) {
 //
 
 void PPU::ColorWindow::render(bool screen) {
-  bool one_enable_ = one_enable, one_invert_ = one_invert;
-  bool two_enable_ = two_enable, two_invert_ = two_invert;
-  unsigned mask_ = mask, main_mask_ = main_mask, sub_mask_ = sub_mask;
+  bool one_enable_, one_invert_, two_enable_, two_invert_;
+  unsigned mask_, main_mask_, sub_mask_;
   const auto& pregs = ppu.render_regs();
   if(ppu.render_src) {
     const auto& s = ppu.render_src->color_window;
     one_enable_ = s.one_enable; one_invert_ = s.one_invert;
     two_enable_ = s.two_enable; two_invert_ = s.two_invert;
     mask_ = s.mask; main_mask_ = s.main_mask; sub_mask_ = s.sub_mask;
+  } else {
+    one_enable_ = one_enable; one_invert_ = one_invert;
+    two_enable_ = two_enable; two_invert_ = two_invert;
+    mask_ = mask; main_mask_ = main_mask; sub_mask_ = sub_mask;
   }
 
   uint8* output = (screen == 0 ? main : sub);

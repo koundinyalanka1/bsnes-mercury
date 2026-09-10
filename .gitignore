@@ -1,3 +1,5 @@
 *.o
 *.so
 *.dll
+/target-libretro/out/obj-optimized/
+/target-libretro/out/libs-optimized/

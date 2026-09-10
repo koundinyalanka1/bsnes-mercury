@@ -18,3 +18,7 @@ Maximum accuracy is still uncompromisable; anything that affects accuracy is opt
 - Examine if ST-0011 is confused by attempts to HLE it.
 
 The name is because metals are shiny, like the accuracy promises of bsnes, and mercury is the fastest metal.
+
+## YAGE performance build
+
+See [renderer benchmarks, compatibility checks, and Android build instructions](docs/PERFORMANCE.md).

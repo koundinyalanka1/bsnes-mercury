@@ -114,6 +114,13 @@ void PPU::set_render_thread_mode(unsigned mode) {
 
 void PPU::mark_vram_dirty() {
   vram_dirty = true;
+  memset(vram_dirty_tiles, 0xff, sizeof(vram_dirty_tiles));
+}
+
+void PPU::mark_vram_dirty(unsigned addr) {
+  vram_dirty = true;
+  const unsigned tile = addr >> 4;
+  vram_dirty_tiles[tile >> 5] |= uint32(1) << (tile & 31);
 }
 
 uint8* PPU::acquire_vram_slot() {
@@ -139,6 +146,8 @@ uint8* PPU::acquire_vram_slot() {
   if(free_slot < 0) free_slot = 0;
 
   memcpy(vram_slot[free_slot], vram, 64 * 1024);
+  memcpy(vram_slot_dirty_tiles[free_slot], vram_dirty_tiles, sizeof(vram_dirty_tiles));
+  memset(vram_dirty_tiles, 0, sizeof(vram_dirty_tiles));
   vram_dirty = false;
   vram_slot_current = free_slot;
   {
@@ -147,11 +156,6 @@ uint8* PPU::acquire_vram_slot() {
   }
   vram_gen++;
   return vram_slot[free_slot];
-}
-
-void PPU::release_vram_slot(unsigned slot) {
-  std::lock_guard<std::mutex> lock(render_mutex);
-  if(slot < VramSlots && vram_slot_ref[slot]) vram_slot_ref[slot]--;
 }
 
 //Only one tile cache is ever live: the worker renders from worker_cache while the render
@@ -214,40 +218,47 @@ void PPU::wait_for_job_slot() {
 }
 
 void PPU::publish_line_job() {
+  bool wake_worker;
   {
     std::lock_guard<std::mutex> lock(render_mutex);
+    wake_worker = job_count == 0;
     jobs[job_write].occupied = true;
     job_write = (job_write + 1) % JobSlots;
     job_count++;
   }
-  render_cv_fill.notify_one();
+  if(wake_worker) render_cv_fill.notify_one();
 }
 
 void PPU::worker_loop() {
   while(true) {
-    unsigned slot;
+    unsigned slot, count;
     {
       std::unique_lock<std::mutex> lock(render_mutex);
       while(!job_count && !render_thread_stop) render_cv_fill.wait(lock);
       if(!job_count && render_thread_stop) return;
       slot = job_read;
+      count = job_count;
     }
 
-    //Rendered in place: the slot stays counted in job_count until the line is finished,
-    //which is what keeps the producer from overwriting it.
-    LineJob& job = jobs[slot];
-    apply_line_job(job);
-    release_vram_slot(job.vram_slot);
+    // Render the published batch in place. Its slots and VRAM references remain
+    // owned by the worker until the completion handoff below.
+    for(unsigned i = 0; i < count; i++)
+      apply_line_job(jobs[(slot + i) % JobSlots]);
 
+    bool wake_caller;
     {
       std::lock_guard<std::mutex> lock(render_mutex);
-      job.occupied = false;
-      job_read = (job_read + 1) % JobSlots;
-      job_count--;
+      wake_caller = job_count == JobSlots || job_count == count;
+      for(unsigned i = 0; i < count; i++) {
+        LineJob& job = jobs[(slot + i) % JobSlots];
+        vram_slot_ref[job.vram_slot]--;
+        job.occupied = false;
+      }
+      job_read = (job_read + count) % JobSlots;
+      job_count -= count;
     }
-    //notify_all because both wait_for_job_slot() and drain_render() wait here on
-    //different predicates.
-    render_cv_empty.notify_all();
+    // Wake a full-queue producer or a drain waiter only when it can progress.
+    if(wake_caller) render_cv_empty.notify_one();
   }
 }
 
@@ -286,7 +297,21 @@ void PPU::capture_line_job(LineJob& job) {
 void PPU::apply_line_job(LineJob& job) {
   render_src = &job;
   if(job.vram_gen != worker_cache_gen) {
-    worker_cache.invalidate();
+    if(job.vram_gen != worker_cache_gen + 1) {
+      worker_cache.invalidate();
+    } else {
+      const uint32* dirty = vram_slot_dirty_tiles[job.vram_slot];
+      for(unsigned word = 0; word < 128; word++) {
+        uint32 bits = dirty[word];
+        for(unsigned bit = 0; bits; bit++, bits >>= 1) {
+          if(!(bits & 1)) continue;
+          const unsigned tile = word * 32 + bit;
+          worker_cache.tilevalid[0][tile] = 0;
+          worker_cache.tilevalid[1][tile >> 1] = 0;
+          worker_cache.tilevalid[2][tile >> 2] = 0;
+        }
+      }
+    }
     worker_cache_gen = job.vram_gen;
   }
   if(job.display_disable) {

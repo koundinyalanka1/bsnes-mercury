@@ -33,7 +33,7 @@ void PPU::vram_write(unsigned addr, uint8 data) {
     cache.tilevalid[0][addr >> 4] = false;
     cache.tilevalid[1][addr >> 5] = false;
     cache.tilevalid[2][addr >> 6] = false;
-    mark_vram_dirty();
+    mark_vram_dirty(addr);
     return;
   }
 }

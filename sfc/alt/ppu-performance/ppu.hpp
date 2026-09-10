@@ -75,8 +75,8 @@ private:
   void snap_color_window(ColorWindowSnap&, const ColorWindow&);
   void snap_background(BgSnap&, const Background&);
   void mark_vram_dirty();
+  void mark_vram_dirty(unsigned addr);
   uint8* acquire_vram_slot();
-  void release_vram_slot(unsigned slot);
   void start_render_thread();
   void stop_render_thread();
   bool pin_worker_off_caller();

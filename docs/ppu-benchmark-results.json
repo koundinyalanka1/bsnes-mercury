@@ -1,0 +1,646 @@
+{
+  "summary": [
+    {
+      "mode": 0,
+      "baseline_ms": 1.4461,
+      "optimized_ms": 1.159,
+      "reduction_percent": 19.9
+    },
+    {
+      "mode": 1,
+      "baseline_ms": 0.9447,
+      "optimized_ms": 0.8056,
+      "reduction_percent": 14.7
+    },
+    {
+      "mode": 2,
+      "baseline_ms": 0.8473,
+      "optimized_ms": 0.7133,
+      "reduction_percent": 15.8
+    },
+    {
+      "mode": 3,
+      "baseline_ms": 0.8463,
+      "optimized_ms": 0.562,
+      "reduction_percent": 33.6
+    },
+    {
+      "mode": 4,
+      "baseline_ms": 0.8976,
+      "optimized_ms": 0.7248,
+      "reduction_percent": 19.3
+    },
+    {
+      "mode": 5,
+      "baseline_ms": 1.3017,
+      "optimized_ms": 1.1232,
+      "reduction_percent": 13.7
+    },
+    {
+      "mode": 6,
+      "baseline_ms": 0.9157,
+      "optimized_ms": 0.8048,
+      "reduction_percent": 12.1
+    },
+    {
+      "mode": 7,
+      "baseline_ms": 0.5261,
+      "optimized_ms": 0.4349,
+      "reduction_percent": 17.3
+    }
+  ],
+  "runs": {
+    "baseline": [
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.1026,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.4648,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.6653,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 0.9214,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.6158,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.8329,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4289,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.7303,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.5932,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.8976,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 0.9994,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.3017,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.7096,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.9128,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.3214,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.5261,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ],
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.0783,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.3517,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.674,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 1.0203,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.5933,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.8473,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4839,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.8463,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.5736,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.8709,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 1.046,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.2944,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.7134,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.9827,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.3307,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.4704,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ],
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.0425,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.4461,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.6971,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 0.9447,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.6202,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.8584,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4489,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.8542,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.5915,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.9019,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 1.0409,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.3659,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.6971,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.9157,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.3337,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.5674,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ]
+    ],
+    "optimized": [
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.1127,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.2355,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.6758,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 0.795,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.597,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.7107,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4406,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.562,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.6033,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.734,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 1.0135,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.088,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.7306,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.8048,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.325,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.4387,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ],
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.1016,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.159,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.675,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 0.8736,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.6008,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.7133,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4501,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.559,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.6032,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.7212,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 1.0239,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.1232,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.7071,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.7985,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.3198,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.4349,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ],
+      [
+        {
+          "mode": 0,
+          "threaded": 0,
+          "ms": 1.0389,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 0,
+          "threaded": 1,
+          "ms": 1.1453,
+          "hash": "265ba277f2811a90"
+        },
+        {
+          "mode": 1,
+          "threaded": 0,
+          "ms": 0.7103,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 1,
+          "threaded": 1,
+          "ms": 0.8056,
+          "hash": "db8a2de6c17ba2d9"
+        },
+        {
+          "mode": 2,
+          "threaded": 0,
+          "ms": 0.603,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 2,
+          "threaded": 1,
+          "ms": 0.7146,
+          "hash": "381405833c8263ef"
+        },
+        {
+          "mode": 3,
+          "threaded": 0,
+          "ms": 0.4618,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 3,
+          "threaded": 1,
+          "ms": 0.5828,
+          "hash": "7845faac4893944b"
+        },
+        {
+          "mode": 4,
+          "threaded": 0,
+          "ms": 0.5949,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 4,
+          "threaded": 1,
+          "ms": 0.7248,
+          "hash": "fa74d78567e56ecb"
+        },
+        {
+          "mode": 5,
+          "threaded": 0,
+          "ms": 1.083,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 5,
+          "threaded": 1,
+          "ms": 1.1337,
+          "hash": "7159d332903ab0c4"
+        },
+        {
+          "mode": 6,
+          "threaded": 0,
+          "ms": 0.7137,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 6,
+          "threaded": 1,
+          "ms": 0.8207,
+          "hash": "7622cfa0707ba99b"
+        },
+        {
+          "mode": 7,
+          "threaded": 0,
+          "ms": 0.3401,
+          "hash": "1b506fa4f4ddabc4"
+        },
+        {
+          "mode": 7,
+          "threaded": 1,
+          "ms": 0.4312,
+          "hash": "1b506fa4f4ddabc4"
+        }
+      ]
+    ]
+  }
+}

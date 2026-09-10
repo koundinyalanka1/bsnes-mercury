@@ -183,7 +183,7 @@ screen(*this) {
   render_thread_stop = false;
   worker_cache_gen = 0;
   vram_slot_current = -1;
-  vram_dirty = true;
+  mark_vram_dirty();
   vram_gen = 0;
   job_read = job_write = job_count = 0;
   render_thread_affinity_cpu = -1;

@@ -1,0 +1,44 @@
+{
+  "base_commit": "41893ca30bf624b23dd87643eb1cc406cff4022d",
+  "ndk": "28.2.13676358",
+  "profile": "performance",
+  "android_api": 24,
+  "files": {
+    "armeabi-v7a/libbsnes_mercury_performance_libretro_android.so": {
+      "sha256": "957ee94eee9099b634def27af588f37952410a4611df0bc831d43347fca5ae6a",
+      "bytes": 1996416
+    },
+    "arm64-v8a/libbsnes_mercury_performance_libretro_android.so": {
+      "sha256": "f5506daae325a370b7b4a9dae00c8158c0b1594e5749363c55c8b0fc6a2dde3c",
+      "bytes": 2899576
+    },
+    "x86_64/libbsnes_mercury_performance_libretro_android.so": {
+      "sha256": "6cf2e202a3697830fbee2b9b29a9da53b3139a8e470de2b84bf3b79e55eea5c7",
+      "bytes": 3160824
+    }
+  },
+  "validation": {
+    "armeabi-v7a": {
+      "bytes": 1996416,
+      "exports": 25,
+      "page_alignment": 16384,
+      "exports_match_existing": true
+    },
+    "arm64-v8a": {
+      "bytes": 2899576,
+      "exports": 25,
+      "page_alignment": 16384,
+      "exports_match_existing": true
+    },
+    "x86_64": {
+      "bytes": 3160824,
+      "exports": 25,
+      "page_alignment": 16384,
+      "exports_match_existing": true
+    },
+    "arm64_migration_check": {
+      "emulator_symbols": 714,
+      "emulator_thread_pointer_reads": 0
+    }
+  }
+}

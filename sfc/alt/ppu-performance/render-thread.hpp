@@ -75,10 +75,12 @@ bool render_thread_running;
 bool render_thread_stop;
 unsigned worker_cache_gen;
 
-//JobSlots is 3 because the worker renders a job in place and holds its slot for the whole
-//scanline; with the old copy-out-then-render scheme two slots plus the worker's private copy
-//gave the same three lines of slack.
-enum : unsigned { VramSlots = 3, JobSlots = 3 };
+// Buffer enough scanlines to amortize worker wakeups without buffering a frame.
+enum : unsigned { VramSlots = 3, JobSlots = 16 };
+// One bit per 16-byte tile block. Snapshots carry changes since the previous
+// generation so unchanged decoded tiles survive small VRAM uploads.
+uint32 vram_dirty_tiles[128];
+uint32 vram_slot_dirty_tiles[VramSlots][128];
 uint8* vram_slot[VramSlots];
 unsigned vram_slot_ref[VramSlots];
 int vram_slot_current;
