@@ -139,22 +139,20 @@ void PPU::mark_vram_dirty(unsigned addr) {
 
 uint8* PPU::acquire_vram_slot() {
   if(!vram_dirty && vram_slot_current >= 0) {
-    std::lock_guard<std::mutex> lock(render_mutex);
-    vram_slot_ref[vram_slot_current]++;
+    vram_slot_ref[vram_slot_current].fetch_add(1, std::memory_order_relaxed);
     return vram_slot[vram_slot_current];
   }
 
+  //The worker's release of a slot is ordered after its last read of that slot, so
+  //seeing zero here is enough to reuse the buffer.
   int free_slot = -1;
-  {
-    std::lock_guard<std::mutex> lock(render_mutex);
-    for(unsigned i = 0; i < VramSlots; i++) {
-      if(vram_slot_ref[i] == 0) { free_slot = (int)i; break; }
-    }
+  for(unsigned i = 0; i < VramSlots; i++) {
+    if(vram_slot_ref[i].load(std::memory_order_acquire) == 0) { free_slot = (int)i; break; }
   }
   if(free_slot < 0) {
     drain_render();
     for(unsigned i = 0; i < VramSlots; i++) {
-      if(vram_slot_ref[i] == 0) { free_slot = (int)i; break; }
+      if(vram_slot_ref[i].load(std::memory_order_acquire) == 0) { free_slot = (int)i; break; }
     }
   }
   if(free_slot < 0) free_slot = 0;
@@ -164,10 +162,7 @@ uint8* PPU::acquire_vram_slot() {
   memset(vram_dirty_tiles, 0, sizeof(vram_dirty_tiles));
   vram_dirty = false;
   vram_slot_current = free_slot;
-  {
-    std::lock_guard<std::mutex> lock(render_mutex);
-    vram_slot_ref[free_slot]++;
-  }
+  vram_slot_ref[free_slot].fetch_add(1, std::memory_order_relaxed);
   vram_gen++;
   return vram_slot[free_slot];
 }
@@ -190,7 +185,8 @@ void PPU::sync_cache_allocation() {
 void PPU::start_render_thread() {
   if(render_thread_running) return;
   render_thread_stop = false;
-  job_read = job_write = job_count = 0;
+  job_read = job_write = 0;
+  job_count.store(0, std::memory_order_relaxed);
   render_thread_affinity_cpu = -1;
   try {
     render_thread = std::thread(&PPU::worker_loop, this);
@@ -212,33 +208,38 @@ void PPU::stop_render_thread() {
   if(render_thread.joinable()) render_thread.join();
   render_thread_running = false;
   render_src = nullptr;
-  job_read = job_write = job_count = 0;
-  for(unsigned i = 0; i < VramSlots; i++) vram_slot_ref[i] = 0;
+  job_read = job_write = 0;
+  job_count.store(0, std::memory_order_relaxed);
+  for(unsigned i = 0; i < VramSlots; i++) vram_slot_ref[i].store(0, std::memory_order_relaxed);
   sync_cache_allocation();
 }
 
 void PPU::drain_render() {
   if(!render_thread_running) return;
   std::unique_lock<std::mutex> lock(render_mutex);
-  while(job_count) render_cv_empty.wait(lock);
+  while(job_count.load(std::memory_order_relaxed)) render_cv_empty.wait(lock);
 }
 
-//Block until jobs[job_write] is free. That slot sits outside the [job_read, job_read +
-//job_count) window the worker owns, so the caller can then fill it in place without the
-//lock; only the index handoff in publish_line_job() is synchronized.
+//Block until the next fill slot is free. Slots the worker owns are [job_read,
+//job_read + job_count); the ones already buffered here are the job_pending that
+//follow, so both count as taken. The caller then fills its slot without the lock;
+//only the index handoff in publish_pending_jobs() is synchronized.
 void PPU::wait_for_job_slot() {
+  if(job_count.load(std::memory_order_relaxed) < JobSlots) return;
   std::unique_lock<std::mutex> lock(render_mutex);
-  while(job_count == JobSlots) render_cv_empty.wait(lock);
+  while(job_count.load(std::memory_order_relaxed) == JobSlots) render_cv_empty.wait(lock);
 }
 
+//Hands the filled slot over. Holding scanlines back to amortize this lock starves
+//the worker for longer than the lock costs, so each one is published as it lands.
 void PPU::publish_line_job() {
+  jobs[job_write].occupied = true;
+  job_write = (job_write + 1) % JobSlots;
   bool wake_worker;
   {
     std::lock_guard<std::mutex> lock(render_mutex);
-    wake_worker = job_count == 0;
-    jobs[job_write].occupied = true;
-    job_write = (job_write + 1) % JobSlots;
-    job_count++;
+    wake_worker = job_count.load(std::memory_order_relaxed) == 0;
+    job_count.fetch_add(1, std::memory_order_relaxed);
   }
   if(wake_worker) render_cv_fill.notify_one();
 }
@@ -248,10 +249,11 @@ void PPU::worker_loop() {
     unsigned slot, count;
     {
       std::unique_lock<std::mutex> lock(render_mutex);
-      while(!job_count && !render_thread_stop) render_cv_fill.wait(lock);
-      if(!job_count && render_thread_stop) return;
+      while(!job_count.load(std::memory_order_relaxed) && !render_thread_stop)
+        render_cv_fill.wait(lock);
+      count = job_count.load(std::memory_order_relaxed);
+      if(!count && render_thread_stop) return;
       slot = job_read;
-      count = job_count;
     }
 
     // Render the published batch in place. Its slots and VRAM references remain
@@ -259,17 +261,21 @@ void PPU::worker_loop() {
     for(unsigned i = 0; i < count; i++)
       apply_line_job(jobs[(slot + i) % JobSlots]);
 
+    //Release the snapshots before the queue slots: a producer that then sees a
+    //slot free must also see this thread's last read of its buffer.
+    for(unsigned i = 0; i < count; i++) {
+      LineJob& job = jobs[(slot + i) % JobSlots];
+      job.occupied = false;
+      vram_slot_ref[job.vram_slot].fetch_sub(1, std::memory_order_release);
+    }
+
     bool wake_caller;
     {
       std::lock_guard<std::mutex> lock(render_mutex);
-      wake_caller = job_count == JobSlots || job_count == count;
-      for(unsigned i = 0; i < count; i++) {
-        LineJob& job = jobs[(slot + i) % JobSlots];
-        vram_slot_ref[job.vram_slot]--;
-        job.occupied = false;
-      }
+      unsigned live = job_count.load(std::memory_order_relaxed);
+      wake_caller = live == JobSlots || live == count;
       job_read = (job_read + count) % JobSlots;
-      job_count -= count;
+      job_count.store(live - count, std::memory_order_relaxed);
     }
     // Wake a full-queue producer or a drain waiter only when it can progress.
     if(wake_caller) render_cv_empty.notify_one();

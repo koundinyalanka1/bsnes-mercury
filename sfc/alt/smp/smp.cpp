@@ -40,10 +40,18 @@ void SMP::power() {
 
   for(unsigned n = 0; n < 256; n++) {
     cycle_table_dsp[n] = (cycle_count_table[n] * 24);
-    cycle_table_cpu[n] = (cycle_count_table[n] * 24) * cpu.frequency;
+    //cycle_table_cpu is uint64, but this product was being formed in 32-bit and
+    //wrapping for the two opcodes of 9 cycles or more: MUL YA (0xcf, 9) and
+    //DIV YA,X (0x9e, 12). Both are staples of SPC music drivers, and a wrapped
+    //advance let the SPC700 run ahead of the CPU -- the APU produced several
+    //percent more samples than the declared 32040.5 Hz, drifting the frontend's
+    //audio buffer and shifting music tempo.
+    cycle_table_cpu[n] = (uint64)cycle_count_table[n] * 24 * cpu.frequency;
   }
 
-  cycle_step_cpu = 24 * cpu.frequency;
+  //Fits today, but form it in 64-bit like the table above so a higher frequency
+  //or the CYCLE_ACCURATE path cannot reintroduce the same wrap.
+  cycle_step_cpu = (uint64)24 * cpu.frequency;
 
   reset();
 }

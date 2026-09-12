@@ -108,6 +108,7 @@ Controller(port),
 chained(chained),
 device(chained == false ? (unsigned)Input::Device::Justifier : (unsigned)Input::Device::Justifiers)
 {
+  active_thread = true;
   create(Controller::Enter, 21477272);
   latched = 0;
   counter = 0;

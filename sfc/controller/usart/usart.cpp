@@ -111,6 +111,7 @@ void USART::latch(bool data) {
 }
 
 USART::USART(bool port) : Controller(port) {
+  active_thread = true;
   latched = 0;
   data1 = 0;
   data2 = 0;

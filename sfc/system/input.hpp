@@ -30,6 +30,8 @@ struct Input {
 
   Controller* port1 = nullptr;
   Controller* port2 = nullptr;
+  //Both ports idle: CPU::step() may batch their clock. Recomputed by connect().
+  bool ports_passive = true;
 
   void connect(bool port, Input::Device id);
   Input();

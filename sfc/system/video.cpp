@@ -93,13 +93,17 @@ void Video::draw_cursor(uint16_t color, int x, int y) {
       if(vx < 0 || vx >= 256) continue;  //do not draw offscreen
       uint8_t pixel = cursor[cy * 15 + cx];
       if(pixel == 0) continue;
+      //ppu.output holds palette indices in the same brightness|bgr555 form the PPU
+      //writes; interface->videoRefresh() is what applies the palette. Storing an
+      //already-converted colour here fed a 24-bit RGB value back in as an index and
+      //read far past the end of the 1<<19 entry table.
       uint32_t pixelcolor = (15 << 15) | ((pixel == 1) ? 0 : color);
 
       if(hires == false) {
-        *((uint32_t*)data + vy * 1024 + vx) = palette[pixelcolor];
+        *((uint32_t*)data + vy * 1024 + vx) = pixelcolor;
       } else {
-        *((uint32_t*)data + vy * 1024 + vx * 2 + 0) = palette[pixelcolor];
-        *((uint32_t*)data + vy * 1024 + vx * 2 + 1) = palette[pixelcolor];
+        *((uint32_t*)data + vy * 1024 + vx * 2 + 0) = pixelcolor;
+        *((uint32_t*)data + vy * 1024 + vx * 2 + 1) = pixelcolor;
       }
     }
   }

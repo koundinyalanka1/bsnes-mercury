@@ -14,6 +14,9 @@ class PPUcounter {
 public:
   alwaysinline void tick();
   alwaysinline void tick(unsigned clocks);
+  //Out of line so that CPU::add_clocks(), which calls tick() on every memory
+  //access, does not have to save the registers this path needs.
+  inline noinline void tick_wrap();
 
   alwaysinline bool   field   () const;
   alwaysinline uint16 vcounter() const;

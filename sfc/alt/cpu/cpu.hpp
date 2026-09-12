@@ -5,6 +5,8 @@ struct CPU : Processor::R65816<CPU>, Thread, public PPUcounter {
   enum : bool { Threaded = true };
   vector<Thread*> coprocessors;
   alwaysinline void step(unsigned clocks);
+  noinline void step_coprocessors(unsigned clocks);
+  noinline void step_controllers(unsigned clocks);
   alwaysinline void synchronize_smp();
   void synchronize_ppu();
   void synchronize_coprocessors();
@@ -27,16 +29,21 @@ struct CPU : Processor::R65816<CPU>, Thread, public PPUcounter {
   void power();
   void reset();
 
+  //Hands out the clock the CPU still owes, without switching to any thread.
+  //Safe to call from outside the emulation cothreads, as Input::connect does.
+  void settle_pending_clocks();
+
   void serialize(serializer&);
   CPU();
   ~CPU();
 
 private:
-  // CPU clocks owed to the SMP, settled at its existing synchronization
-  // points (at least once per scanline, keeping the debt bounded).
-  // This avoids a wide multiply on every CPU memory access.
-  unsigned smp_pending_clocks;
-  void flush_smp_clock();
+  // CPU clocks owed to the SMP and, while both ports are passive, to the
+  // controllers. Settled at the SMP's existing synchronization points, which run
+  // at least once per scanline and keep the debt bounded. One counter for both
+  // keeps a load/add/store off every CPU memory access, and neither consumer can
+  // observe the difference: a passive controller thread only burns clock.
+  unsigned pending_clocks;
 
   //cpu
   static void Enter();
@@ -50,10 +57,17 @@ private:
     };
   };
   nall::priority_queue<unsigned> queue;
+  // IRQ comparison values derived from $4207-$420a and the region. Recomputed on
+  // write rather than rebuilt inside poll_irq() on every memory access.
+  unsigned irq_time;
+  unsigned irq_htime4;
+  unsigned frame_clocks;
+  void update_irq_time();
+  void update_frame_clocks();
   void queue_event(unsigned id);
   void last_cycle();
   void add_clocks(unsigned clocks);
-  noinline void poll_irq(unsigned clocks);
+  alwaysinline void poll_irq(unsigned clocks);
   void scanline();
   void run_auto_joypad_poll();
 

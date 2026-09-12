@@ -69,6 +69,11 @@ void PPU::render_scanline() {
   bg3.scanline();
   bg4.scanline();
   sprite.evaluate();
+  //The frontend dropped this frame. Sprite evaluation sets the overflow flags the
+  //CPU can read back at $213e, and the background mosaic counters advance per line,
+  //so both still run; only the pixel work is skipped. That keeps a dropped frame
+  //indistinguishable from a rendered one to the emulated machine.
+  if(!render_enabled) return;
   if(!render_thread_running) {
     render_scanline_inline();
     return;
@@ -175,6 +180,7 @@ screen(*this) {
   display.height = 224;
   display.frameskip = 0;
   display.framecounter = 0;
+  render_enabled = true;
 
   ppu_fast_paths = true;
   render_src = nullptr;
@@ -185,11 +191,12 @@ screen(*this) {
   vram_slot_current = -1;
   mark_vram_dirty();
   vram_gen = 0;
-  job_read = job_write = job_count = 0;
+  job_read = job_write = 0;
+  job_count.store(0, std::memory_order_relaxed);
   render_thread_affinity_cpu = -1;
   for(unsigned i = 0; i < VramSlots; i++) {
     vram_slot[i] = new uint8[64 * 1024]();
-    vram_slot_ref[i] = 0;
+    vram_slot_ref[i].store(0, std::memory_order_relaxed);
   }
   set_render_thread_mode(RenderThreadAuto);
   //Covers the case where the thread never started, so stop_render_thread() returned early

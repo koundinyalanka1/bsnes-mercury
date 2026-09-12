@@ -47,30 +47,42 @@ struct serializer {
     return _capacity;
   }
 
+  //Set when a transfer ran past the buffer. Save states reach a core straight from
+  //a file the user chose, so a truncated or corrupt one has to fail rather than
+  //read whatever follows the allocation.
+  bool invalid() const {
+    return _invalid;
+  }
+
   template<typename T> serializer& floatingpoint(T& value) {
     enum { size = sizeof(T) };
     //this is rather dangerous, and not cross-platform safe;
     //but there is no standardized way to export FP-values
     uint8_t* p = (uint8_t*)&value;
+    if(_mode == Size) { _size += size; return *this; }
+    if(_size + size > _capacity) { _invalid = true; _size += size; return *this; }
     if(_mode == Save) {
       for(unsigned n = 0; n < size; n++) _data[_size++] = p[n];
-    } else if(_mode == Load) {
-      for(unsigned n = 0; n < size; n++) p[n] = _data[_size++];
     } else {
-      _size += size;
+      for(unsigned n = 0; n < size; n++) p[n] = _data[_size++];
     }
     return *this;
   }
 
   template<typename T> serializer& integer(T& value) {
     enum { size = std::is_same<bool, T>::value ? 1 : sizeof(T) };
+    if(_mode == Size) { _size += size; return *this; }
+    if(_size + size > _capacity) {
+      _invalid = true;
+      _size += size;
+      if(_mode == Load) value = 0;
+      return *this;
+    }
     if(_mode == Save) {
       for(unsigned n = 0; n < size; n++) _data[_size++] = (uintmax_t)value >> (n << 3);
-    } else if(_mode == Load) {
+    } else {
       value = 0;
       for(unsigned n = 0; n < size; n++) value |= (uintmax_t)_data[_size++] << (n << 3);
-    } else if(_mode == Size) {
-      _size += size;
     }
     return *this;
   }
@@ -143,6 +155,7 @@ private:
   uint8_t* _data = nullptr;
   unsigned _size = 0;
   unsigned _capacity = 0;
+  bool _invalid = false;
 };
 
 };

@@ -46,7 +46,7 @@ void Controller::iobit(bool data) {
     bus.write(0x4201, (cpu.pio() & ~0x80) | (data << 7));
 }
 
-Controller::Controller(bool port) : port(port) {
+Controller::Controller(bool port) : port(port), active_thread(false) {
   if(!thread) create(Controller::Enter, 1);
 }
 

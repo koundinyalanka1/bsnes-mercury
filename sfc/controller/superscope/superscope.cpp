@@ -104,6 +104,7 @@ void SuperScope::latch(bool data) {
 }
 
 SuperScope::SuperScope(bool port) : Controller(port) {
+  active_thread = true;
   create(Controller::Enter, 21477272);
   latched = 0;
   counter = 0;

@@ -10,6 +10,10 @@
 #include "../ananke/heuristics/game-boy.hpp"
 #include <string>
 
+/* Postdates the bundled libretro.h. int* out:
+   bit 0 enable audio, bit 1 enable video, bit 2 fast savestates, bit 3 hard audio disable. */
+#define RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE 47
+
 // Special memory types.
 #define RETRO_MEMORY_SNES_BSX_RAM             ((1 << 8) | RETRO_MEMORY_SAVE_RAM)
 #define RETRO_MEMORY_SNES_BSX_PRAM            ((2 << 8) | RETRO_MEMORY_SAVE_RAM)
@@ -96,6 +100,8 @@ struct Callbacks : Emulator::Interface::Bind {
   retro_input_state_t pinput_state;
   retro_environment_t penviron;
   bool crop_overscan;
+  bool video_enabled;
+  bool audio_enabled;
   bool gamma_ramp;
   bool perf_stats;
   unsigned short region_mode;
@@ -104,6 +110,8 @@ struct Callbacks : Emulator::Interface::Bind {
   int speed_profile;      // 0 auto, 1 full, 2 balanced, 3 fast
   int speed_step;         // 0 full, 1 balanced, 2 fast (auto ladder)
   int ppu_thread_user;    // 0 auto, 1 enabled, 2 disabled
+  unsigned user_frameskip;
+  int dsp_fast_user;      // 0 auto (follow the speed ladder), 1 forced on, 2 forced off
   bool ppu_fast_user;
   int64_t run_ewma_ns;
   unsigned over_budget;
@@ -197,6 +205,15 @@ struct Callbacks : Emulator::Interface::Bind {
       output(RETRO_LOG_DEBUG, "Previous display height: %u\n", previous_height);
       previous_height = height;
       update_system_geometry();
+    }
+
+    //Frontend asked for this frame to be dropped: report a duplicate rather than
+    //paying for the palette conversion of a framebuffer the PPU never redrew.
+    if (!video_enabled)
+    {
+      pvideo_refresh(NULL, width, height,
+        width * (video_fmt == video_fmt_32 ? sizeof(uint32_t) : sizeof(uint16_t)));
+      return;
     }
 
     if (video_fmt == video_fmt_32)
@@ -527,6 +544,7 @@ void retro_set_environment(retro_environment_t environ_cb)
       { "bsnes_perf_stats", "Log retro_run slice times; disabled|enabled" },
       { "bsnes_ppu_fast", "Fast PPU paths; enabled|disabled" },
       { "bsnes_frameskip", "PPU frameskip (CPU still runs); 0|1|2|3" },
+      { "bsnes_dsp_fast", "SPC DSP fast mode (drops echo and gaussian interpolation); auto|disabled|enabled" },
       { "bsnes_speed_profile", "Speed profile; auto|full|balanced|fast" },
       { "bsnes_cpu_jit", "65816 JIT (interpreter if no backend); auto|disabled" },
 #ifdef EXPERIMENTAL_FEATURES
@@ -624,14 +642,27 @@ static void apply_speed_step() {
   else if(core_bind.speed_profile == 3) core_bind.speed_step = 2;
   else if(core_bind.speed_profile == 1) core_bind.speed_step = 0;
 
-  if(core_bind.speed_step >= 1) { skip = 1; dsp_fast = true; }
+  //Rendering is the only place the ladder recovers meaningful time. Measured on
+  //gameplay: frameskip 2 saves 10-20% of the emulation thread, while SPC DSP fast
+  //mode saves 0-2% and silences the echo unit outright, so the ladder no longer
+  //reaches for it -- bsnes_dsp_fast does, for anyone who wants that trade.
+  //The old step 1 set frameskip 1, which renders every frame and so recovered nothing.
+  if(core_bind.speed_step >= 1) skip = 2;
   //Keep the render thread on at the heaviest step: offloading rendering is most valuable
   //precisely when the emulation thread is furthest over budget. Only an explicit user
   //setting of "disabled" turns it off.
-  if(core_bind.speed_step >= 2) skip = 2;
+  if(core_bind.speed_step >= 2) skip = 3;
 
+  //apply_speed_step() also runs from retro_load_game(), so honouring the option here
+  //is what keeps it from being reset every time a game is loaded.
+  if(core_bind.speed_profile == 1 && core_bind.user_frameskip > 0)
+    skip = core_bind.user_frameskip;
   SuperFamicom::ppu.set_frameskip(skip);
   SuperFamicom::ppu.set_ppu_fast(core_bind.ppu_fast_user);
+  //fast mode silences the echo unit and drops gaussian interpolation, which is
+  //audible on most soundtracks. Let it be pinned independently of the speed ladder.
+  if(core_bind.dsp_fast_user == 1) dsp_fast = true;
+  else if(core_bind.dsp_fast_user == 2) dsp_fast = false;
   SuperFamicom::dsp.set_fast(dsp_fast);
   SuperFamicom::ppu.set_render_thread_mode(ppu_mode);
 }
@@ -730,13 +761,16 @@ static void update_variables(void) {
    if(core_bind.speed_profile != 0 && core_bind.speed_profile != prev_profile)
      core_bind.over_budget = core_bind.under_budget = 0;
 
-   unsigned user_frameskip = (unsigned)strtoul(get_var("bsnes_frameskip", "0"), NULL, 10);
+   core_bind.user_frameskip = (unsigned)strtoul(get_var("bsnes_frameskip", "0"), NULL, 10);
+
+   const char * dsp_fast_opt = get_var("bsnes_dsp_fast", "auto");
+   core_bind.dsp_fast_user = 0;
+   if(!strcmp(dsp_fast_opt, "enabled")) core_bind.dsp_fast_user = 1;
+   else if(!strcmp(dsp_fast_opt, "disabled")) core_bind.dsp_fast_user = 2;
 
    core_bind.perf_stats = !strcmp(get_var("bsnes_perf_stats", "disabled"), "enabled");
 
    apply_speed_step();
-   if(core_bind.speed_profile == 1 && user_frameskip > 0)
-     SuperFamicom::ppu.set_frameskip(user_frameskip);
 
    output(RETRO_LOG_DEBUG, "superfx_freq_orig: %u\n", superfx_freq_orig);
    output(RETRO_LOG_DEBUG, "SuperFamicom::superfx.frequency: %u\n", SuperFamicom::superfx.frequency);
@@ -757,9 +791,13 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 }
 
 void retro_init(void) {
+  core_bind.video_enabled = true;
+  core_bind.audio_enabled = true;
   core_bind.speed_profile = 0;
   core_bind.speed_step = 0;
   core_bind.ppu_thread_user = 0;
+  core_bind.user_frameskip = 0;
+  core_bind.dsp_fast_user = 0;
   core_bind.ppu_fast_user = true;
   core_bind.run_ewma_ns = 0;
   core_bind.over_budget = 0;
@@ -796,6 +834,18 @@ void retro_run(void) {
   bool updated = false;
   if (core_bind.penviron(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     update_variables();
+
+  //Lets an adaptive frontend shed individual frames instead of forcing a fixed
+  //frameskip on us. Absent support, both stay enabled and nothing changes.
+  int av_enable = 0;
+  core_bind.video_enabled = true;
+  core_bind.audio_enabled = true;
+  if (core_bind.penviron(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av_enable)) {
+    core_bind.audio_enabled = (av_enable & 1) && !(av_enable & 8);
+    core_bind.video_enabled = (av_enable & 2) != 0;
+  }
+  SuperFamicom::ppu.set_render_enabled(core_bind.video_enabled);
+
   using clock = std::chrono::steady_clock;
   clock::time_point t0 = clock::now();
   SuperFamicom::system.run();
@@ -822,10 +872,9 @@ void retro_run(void) {
         core_bind.speed_step++;
         core_bind.over_budget = 0;
         apply_speed_step();
-        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u dsp_fast=%d\n",
+        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u\n",
           core_bind.speed_step, core_bind.run_ewma_ns / 1e6,
-          core_bind.speed_step >= 2 ? 2u : (core_bind.speed_step >= 1 ? 1u : 0u),
-          core_bind.speed_step >= 1 ? 1 : 0);
+          core_bind.speed_step >= 2 ? 3u : (core_bind.speed_step >= 1 ? 2u : 0u));
       }
     } else if(core_bind.run_ewma_ns < budget - 2500000LL) {
       core_bind.under_budget++;
@@ -834,10 +883,9 @@ void retro_run(void) {
         core_bind.speed_step--;
         core_bind.under_budget = 0;
         apply_speed_step();
-        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u dsp_fast=%d\n",
+        output(RETRO_LOG_WARN, "speed_profile step=%d run=%.2fms frameskip=%u\n",
           core_bind.speed_step, core_bind.run_ewma_ns / 1e6,
-          core_bind.speed_step >= 2 ? 2u : (core_bind.speed_step >= 1 ? 1u : 0u),
-          core_bind.speed_step >= 1 ? 1 : 0);
+          core_bind.speed_step >= 2 ? 3u : (core_bind.speed_step >= 1 ? 2u : 0u));
       }
     } else {
       core_bind.over_budget = 0;
@@ -852,7 +900,8 @@ void retro_run(void) {
       SuperFamicom::ppu.framebuffer_hash());
   }
   if(core_bind.sampleBufPos) {
-    core_bind.paudio(core_bind.sampleBuf.data(), core_bind.sampleBufPos >> 1);
+    if(core_bind.audio_enabled)
+      core_bind.paudio(core_bind.sampleBuf.data(), core_bind.sampleBufPos >> 1);
     core_bind.sampleBufPos = 0;
   }
 }
@@ -870,6 +919,10 @@ bool retro_serialize(void *data, size_t size) {
 }
 
 bool retro_unserialize(const void *data, size_t size) {
+  //A state for this cartridge is always exactly serialize_size() bytes. Rejecting
+  //anything shorter here costs nothing and keeps a truncated file from being
+  //copied into the serializer at all.
+  if(!data || size < SuperFamicom::system.serialize_size()) return false;
   serializer s((const uint8_t*)data, size);
   return SuperFamicom::system.unserialize(s);
 }

@@ -32,38 +32,55 @@ void CPU::last_cycle() {
   }
 }
 
+//Both values below depend only on registers, so they are rebuilt on write instead
+//of on every memory access. frame_clocks still needs field() added at use, because
+//the field flips mid-frame.
+void CPU::update_irq_time() {
+  irq_time = status.vtime * 1364 + status.htime * 4;
+  irq_htime4 = status.htime * 4;
+}
+
+void CPU::update_frame_clocks() {
+  frame_clocks = (system.region() == System::Region::NTSC ? 262 : 312) * 1364;
+}
+
+//Runs on every CPU memory access, so it is inline and call-free.
+//
+//`(target - now) < clocks` on unsigned values is exactly the original
+//`now <= target && now + clocks > target`, for every input rather than only the
+//reachable ones:
+//  now >  target: the subtraction wraps to at least 2^32 - 357368, which exceeds
+//                 any clocks value, so both forms are false.
+//  now <= target: target - now cannot overflow, so the test is clocks > target - now,
+//                 which is the second conjunct, and the first is already true.
 void CPU::poll_irq(unsigned clocks) {
   if(status.hirq_enabled) {
+    unsigned now, target;
     if(status.virq_enabled) {
-      unsigned cpu_time = vcounter() * 1364 + hcounter();
-      unsigned irq_time = status.vtime * 1364 + status.htime * 4;
-      unsigned framelines = (system.region() == System::Region::NTSC ? 262 : 312) + field();
-      if(cpu_time > irq_time) irq_time += framelines * 1364;
-      bool irq_valid = status.irq_valid;
-      status.irq_valid = cpu_time <= irq_time && cpu_time + clocks > irq_time;
-      if(!irq_valid && status.irq_valid) status.irq_line = true;
+      now = vcounter() * 1364 + hcounter();
+      target = irq_time;
+      if(now > target) target += frame_clocks + (field() ? 1364 : 0);
     } else {
-      unsigned irq_time = status.htime * 4;
-      if(hcounter() > irq_time) irq_time += 1364;
-      bool irq_valid = status.irq_valid;
-      status.irq_valid = hcounter() <= irq_time && hcounter() + clocks > irq_time;
-      if(!irq_valid && status.irq_valid) status.irq_line = true;
+      now = hcounter();
+      target = irq_htime4;
+      if(now > target) target += 1364;
     }
+    bool valid = (target - now) < clocks;
+    if(!status.irq_valid && valid) status.irq_line = true;
+    status.irq_valid = valid;
     if(status.irq_line) status.irq_transition = true;
   } else if(status.virq_enabled) {
-    bool irq_valid = status.irq_valid;
-    status.irq_valid = vcounter() == status.vtime;
-    if(!irq_valid && status.irq_valid) status.irq_line = true;
+    bool valid = vcounter() == status.vtime;
+    if(!status.irq_valid && valid) status.irq_line = true;
+    status.irq_valid = valid;
     if(status.irq_line) status.irq_transition = true;
   } else {
     status.irq_valid = false;
   }
-
 }
 
 void CPU::add_clocks(unsigned clocks) {
-  if(status.hirq_enabled || status.virq_enabled) poll_irq(clocks);
-  else status.irq_valid = false;
+  poll_irq(clocks);
 
   tick(clocks);
   queue.tick(clocks);
@@ -71,7 +88,13 @@ void CPU::add_clocks(unsigned clocks) {
 }
 
 void CPU::scanline() {
+  //synchronize_smp() settles the shared debt. The ports then need their own switch
+  //only in the case step() skipped it, which is exactly when there was debt to
+  //settle and the ports are passive. Switching unconditionally would move when an
+  //active controller -- a light gun polling the raster -- runs.
+  bool settled = pending_clocks != 0;
   synchronize_smp();
+  if(settled && input.ports_passive) synchronize_controllers();
   synchronize_ppu();
   synchronize_coprocessors();
   system.scanline(status.frame_event_performed);

@@ -51,6 +51,7 @@ void DSP::write(uint8 addr, uint8 data) {
 
 void DSP::power() {
   spc_dsp.init(smp.apuram);
+  spc_dsp.set_fast(fast_requested);
   spc_dsp.reset();
   spc_dsp.set_output(samplebuffer, 8192);
 }
@@ -71,6 +72,7 @@ void DSP::channel_enable(unsigned channel, bool enable) {
 
 DSP::DSP() {
   for(unsigned i = 0; i < 8; i++) channel_enabled[i] = true;
+  fast_requested = false;
   spc_dsp.set_fast(false);
 }
 

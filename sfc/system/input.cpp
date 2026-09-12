@@ -5,6 +5,9 @@ Input input;
 void Input::connect(bool port, Input::Device id) {
   Controller*& controller = (port == Controller::Port1 ? port1 : port2);
   if(controller) {
+    //Hand the port its outstanding clock before it goes away. Never reached during
+    //Input's own construction, where cpu may not be constructed yet.
+    cpu.settle_pending_clocks();
     delete controller;
     controller = nullptr;
   }
@@ -24,6 +27,8 @@ void Input::connect(bool port, Input::Device id) {
     configuration.controller_port1 = id;
   else
     configuration.controller_port2 = id;
+
+  ports_passive = (!port1 || !port1->active_thread) && (!port2 || !port2->active_thread);
 }
 
 Input::Input() {

@@ -12,24 +12,41 @@ CPU cpu;
 #include "timing.cpp"
 
 void CPU::step(unsigned clocks) {
-  smp_pending_clocks += clocks;
+  pending_clocks += clocks;
   ppu.clock -= clocks;
+  if(coprocessors.size()) step_coprocessors(clocks);
+  if(!input.ports_passive) step_controllers(clocks);
+}
+
+void CPU::step_coprocessors(unsigned clocks) {
   for(unsigned i = 0; i < coprocessors.size(); i++) {
     auto& chip = *coprocessors[i];
     chip.clock -= clocks * (uint64)chip.frequency;
   }
+}
+
+//Only reached for a light gun or the USART, whose threads do observable work and
+//so cannot have their clock settled in batches.
+void CPU::step_controllers(unsigned clocks) {
   input.port1->clock -= clocks * (uint64)input.port1->frequency;
   input.port2->clock -= clocks * (uint64)input.port2->frequency;
   synchronize_controllers();
 }
 
-void CPU::flush_smp_clock() {
-  smp.clock -= smp_pending_clocks * (uint64)smp.frequency;
-  smp_pending_clocks = 0;
+//Passive controllers are always created at frequency 1, so the owed clock applies
+//directly. A port may be absent here: Input::connect() settles the debt mid-swap.
+void CPU::settle_pending_clocks() {
+  if(pending_clocks == 0) return;
+  smp.clock -= pending_clocks * (uint64)smp.frequency;
+  if(input.ports_passive) {
+    if(input.port1) input.port1->clock -= pending_clocks;
+    if(input.port2) input.port2->clock -= pending_clocks;
+  }
+  pending_clocks = 0;
 }
 
 void CPU::synchronize_smp() {
-  flush_smp_clock();
+  settle_pending_clocks();
   if(SMP::Threaded == true) {
     if(smp.clock < 0) co_switch(smp.thread);
   } else {
@@ -120,7 +137,7 @@ void CPU::power() {
 }
 
 void CPU::reset() {
-  smp_pending_clocks = 0;
+  pending_clocks = 0;
   create(Enter, system.cpu_frequency());
   coprocessors.reset();
   PPUcounter::reset();
@@ -169,6 +186,8 @@ void CPU::reset() {
 
   status.htime = 0x0000;
   status.vtime = 0x0000;
+  update_frame_clocks();
+  update_irq_time();
 
   status.rom_speed = 8;
 

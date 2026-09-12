@@ -1,6 +1,7 @@
 #ifndef SFC_HPP
 #define SFC_HPP
 
+#include <atomic>
 #include <thread>
 #include <mutex>
 #include <condition_variable>

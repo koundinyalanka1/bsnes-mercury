@@ -194,21 +194,25 @@ void CPU::mmio_write(unsigned addr, uint8 data) {
 
     case 0x4207: {
       status.htime = (status.htime & 0x0100) | (data << 0);
+      update_irq_time();
       return;
     }
 
     case 0x4208: {
       status.htime = ((data & 1) << 8) | (status.htime & 0x00ff);
+      update_irq_time();
       return;
     }
 
     case 0x4209: {
       status.vtime = (status.vtime & 0x0100) | (data << 0);
+      update_irq_time();
       return;
     }
 
     case 0x420a: {
       status.vtime = ((data & 1) << 8) | (status.vtime & 0x00ff);
+      update_irq_time();
       return;
     }
 

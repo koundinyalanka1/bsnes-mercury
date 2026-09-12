@@ -14,6 +14,9 @@
 struct Controller : Thread {
   enum : bool { Port1 = 0, Port2 = 1 };
   const bool port;
+  //Set by the devices that override enter(). A passive device's thread only burns
+  //clock, so the CPU may settle its debt in batches instead of on every access.
+  bool active_thread;
 
   static void Enter();
   virtual void enter();

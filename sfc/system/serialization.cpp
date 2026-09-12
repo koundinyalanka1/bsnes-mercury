@@ -30,12 +30,19 @@ bool System::unserialize(serializer& s) {
   s.array(description);
   s.array(profile);
 
+  //The header alone is 600 bytes, so a state shorter than that must be rejected
+  //before any of these values is believed.
+  if(s.invalid()) return false;
   if(signature != 0x31545342) return false;
   if(version != Info::SerializerVersion) return false;
+  //s.array() fills the whole field whether or not the stored name was terminated.
+  profile[sizeof(profile) - 1] = '\0';
   if(strcmp(profile, Emulator::Profile)) return false;
 
   power();
   serialize_all(s);
+  //A truncated body leaves the machine half-loaded; reset it rather than run on.
+  if(s.invalid()) { power(); return false; }
   return true;
 }
 

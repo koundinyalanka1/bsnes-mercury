@@ -23,6 +23,10 @@ struct PPU : Thread, public PPUcounter {
 
   void layer_enable(unsigned layer, unsigned priority, bool enable);
   void set_frameskip(unsigned frameskip);
+  //Per-frame video gate for RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE. Unlike
+  //set_frameskip() this is decided by the frontend each frame, so it can render
+  //everything while there is headroom and shed only the frames that overrun.
+  void set_render_enabled(bool enable) { render_enabled = enable; }
   void set_render_thread_mode(unsigned mode);
   void drain_render();
   bool render_thread_active() const;
@@ -64,6 +68,7 @@ private:
     unsigned frameskip;
     unsigned framecounter;
   } display;
+  bool render_enabled;
 
   static void Enter();
   void add_clocks(unsigned clocks);

@@ -16,9 +16,26 @@ template<typename type_t> void priority_queue_nocallback(type_t) {}
 //O(log n) append (enqueue)
 //O(log n) remove (dequeue)
 template<typename type_t> struct priority_queue {
+  //Called on every CPU memory access, so the hot path is a single comparison
+  //against a cached copy of heap[0].counter rather than reloading the heap size
+  //and chasing the heap pointer.
   inline void tick(unsigned ticks) {
     basecounter += ticks;
+    if(gte(basecounter, next_counter)) drain();
+  }
+
+  //Out of line: this runs a handful of times per scanline, while tick() runs on
+  //every CPU memory access and should not carry its register footprint.
+  noinline void drain() {
     while(heapsize && gte(basecounter, heap[0].counter)) callback(dequeue());
+    refresh_next();
+  }
+
+  //When the queue is empty the comparand is parked half the counter range ahead,
+  //which gte() reads as "not yet due" for any reachable basecounter.
+  inline void refresh_next() {
+    next_counter = heapsize ? heap[0].counter
+                            : basecounter + (std::numeric_limits<unsigned>::max() >> 1);
   }
 
   //counter is relative to current time (eg enqueue(64, ...) fires in 64 ticks);
@@ -38,6 +55,7 @@ template<typename type_t> struct priority_queue {
 
     heap[child].counter = counter;
     heap[child].event = event;
+    refresh_next();
   }
 
   type_t dequeue() {
@@ -64,6 +82,7 @@ template<typename type_t> struct priority_queue {
   void reset() {
     basecounter = 0;
     heapsize = 0;
+    refresh_next();
   }
 
   void serialize(serializer& s) {
@@ -73,6 +92,7 @@ template<typename type_t> struct priority_queue {
       s.integer(heap[n].counter);
       s.integer(heap[n].event);
     }
+    refresh_next();
   }
 
   priority_queue(unsigned size, function<void (type_t)> callback = &priority_queue_nocallback<type_t>)
@@ -92,6 +112,7 @@ template<typename type_t> struct priority_queue {
 private:
   function<void (type_t)> callback;
   unsigned basecounter;
+  unsigned next_counter;
   unsigned heapsize;
   unsigned heapcapacity;
   struct heap_t {

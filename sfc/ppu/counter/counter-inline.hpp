@@ -19,10 +19,14 @@ void PPUcounter::tick(unsigned clocks) {
   status.hcounter += clocks;
   // Every scanline is at least 1360 clocks. Most CPU accesses cannot
   // reach its end, so avoid loading region/interlace/field on that path.
-  if(status.hcounter >= 1360 && status.hcounter >= lineclocks()) {
-    status.hcounter -= lineclocks();
-    vcounter_tick();
-  }
+  if(status.hcounter >= 1360) tick_wrap();
+}
+
+void PPUcounter::tick_wrap() {
+  unsigned clocks = lineclocks();
+  if(status.hcounter < clocks) return;
+  status.hcounter -= clocks;
+  vcounter_tick();
 }
 
 //internal
