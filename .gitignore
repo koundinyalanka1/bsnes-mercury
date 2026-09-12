@@ -3,3 +3,5 @@
 *.dll
 /target-libretro/out/obj-optimized/
 /target-libretro/out/libs-optimized/
+/target-libretro/out/obj-lto/
+/target-libretro/out/libs-lto/

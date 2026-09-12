@@ -32,7 +32,7 @@ void CPU::last_cycle() {
   }
 }
 
-void CPU::add_clocks(unsigned clocks) {
+void CPU::poll_irq(unsigned clocks) {
   if(status.hirq_enabled) {
     if(status.virq_enabled) {
       unsigned cpu_time = vcounter() * 1364 + hcounter();
@@ -58,6 +58,12 @@ void CPU::add_clocks(unsigned clocks) {
   } else {
     status.irq_valid = false;
   }
+
+}
+
+void CPU::add_clocks(unsigned clocks) {
+  if(status.hirq_enabled || status.virq_enabled) poll_irq(clocks);
+  else status.irq_valid = false;
 
   tick(clocks);
   queue.tick(clocks);

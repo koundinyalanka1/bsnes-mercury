@@ -32,6 +32,12 @@ struct CPU : Processor::R65816<CPU>, Thread, public PPUcounter {
   ~CPU();
 
 private:
+  // CPU clocks owed to the SMP, settled at its existing synchronization
+  // points (at least once per scanline, keeping the debt bounded).
+  // This avoids a wide multiply on every CPU memory access.
+  unsigned smp_pending_clocks;
+  void flush_smp_clock();
+
   //cpu
   static void Enter();
   void op_step();
@@ -47,6 +53,7 @@ private:
   void queue_event(unsigned id);
   void last_cycle();
   void add_clocks(unsigned clocks);
+  noinline void poll_irq(unsigned clocks);
   void scanline();
   void run_auto_joypad_poll();
 

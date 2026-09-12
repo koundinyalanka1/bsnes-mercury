@@ -9,8 +9,9 @@ struct SMP : Thread {
   unsigned port_read(unsigned port);
   void port_write(unsigned port, unsigned data);
 
-  unsigned mmio_read(unsigned addr);
-  void mmio_write(unsigned addr, unsigned data);
+  // Keep MMIO dispatch out of the 256 inlined opcode bodies.
+  noinline unsigned mmio_read(unsigned addr);
+  noinline void mmio_write(unsigned addr, unsigned data);
 
   void enter();
   void power();

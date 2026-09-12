@@ -61,12 +61,22 @@ bool PPU::pin_worker_off_caller() {
   }
 
 #if defined(__linux__)
-  int caller = sched_getcpu();
-  if(caller < 0) caller = 0;
-  int worker = (caller + 1) % (int)cores;
+  // Use the process leader's allowed CPUs: the frontend may have narrowed
+  // only its emulation thread's affinity. Let the OS choose among the other
+  // eligible CPUs instead of guessing that caller+1 is a suitable worker.
   cpu_set_t set;
   CPU_ZERO(&set);
-  CPU_SET(worker, &set);
+  if(sched_getaffinity(getpid(), sizeof(set), &set) != 0) {
+    render_thread_affinity_cpu = -2;
+    return false;
+  }
+  int caller = sched_getcpu();
+  if(caller >= 0 && caller < CPU_SETSIZE && CPU_COUNT(&set) > 1)
+    CPU_CLR(caller, &set);
+  if(CPU_COUNT(&set) == 0) {
+    render_thread_affinity_cpu = -2;
+    return false;
+  }
 #if defined(__ANDROID__)
   pid_t tid = pthread_gettid_np(render_thread.native_handle());
   if(tid <= 0 || sched_setaffinity((int)tid, sizeof(set), &set) != 0) {
@@ -79,7 +89,11 @@ bool PPU::pin_worker_off_caller() {
     return false;
   }
 #endif
-  render_thread_affinity_cpu = worker;
+  // -3 denotes an OS-scheduled set, rather than one fixed CPU.
+  render_thread_affinity_cpu = -3;
+  if(CPU_COUNT(&set) == 1)
+    for(int cpu = 0; cpu < CPU_SETSIZE; cpu++)
+      if(CPU_ISSET(cpu, &set)) { render_thread_affinity_cpu = cpu; break; }
   return true;
 #else
   render_thread_affinity_cpu = -1;

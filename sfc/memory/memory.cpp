@@ -18,7 +18,13 @@ void Bus::map(
   assert(addrlo <= addrhi && addrlo <= 0xffff);
   assert(idcount < 255);
 
-  bool do_fast=(size%(addrhi+1-addrlo)==0 && !((mask|addrlo|addrhi|size)&fast_page_size_mask));
+  // addrhi is inclusive: the boundary after it must be page-aligned.
+  // Testing addrhi itself rejected every ordinary ROM/RAM page. Require
+  // aligned backing/mirroring boundaries so an entire page stays contiguous.
+  bool do_fast = fastptr && size > base
+    && size % (addrhi + 1 - addrlo) == 0
+    && base % (addrhi + 1 - addrlo) == 0
+    && !((mask | addrlo | (addrhi + 1) | size | base) & fast_page_size_mask);
   bool do_fast_read =(fastmode!=Cartridge::Mapping::fastmode_slow      && do_fast);
   bool do_fast_write=(fastmode==Cartridge::Mapping::fastmode_readwrite && do_fast);
   for(unsigned bank = banklo; bank <= bankhi; bank++) {
@@ -28,9 +34,9 @@ void Bus::map(
 
       unsigned accesspos = reduce(origpos, mask);
       if(size) accesspos = base + mirror(accesspos, size - base);
-      if(do_fast_read)  fast_read[fastoffset] = fastptr - origpos + accesspos;
+      if(do_fast_read)  fast_read[fastoffset] = fastptr + accesspos;
       else fast_read[fastoffset] = NULL;
-      if(do_fast_write) fast_write[fastoffset] = fastptr - origpos + accesspos;
+      if(do_fast_write) fast_write[fastoffset] = fastptr + accesspos;
       else fast_write[fastoffset] = NULL;
     }
   }

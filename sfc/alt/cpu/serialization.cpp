@@ -1,6 +1,10 @@
 #ifdef CPU_CPP
 
 void CPU::serialize(serializer& s) {
+  // Preserve the existing state layout: materialize the debt in smp.clock
+  // before SMP serialization, and start restored execution with no debt.
+  if(s.mode() == serializer::Save) flush_smp_clock();
+  if(s.mode() == serializer::Load) smp_pending_clocks = 0;
   R65816::serialize(s);
   Thread::serialize(s);
   PPUcounter::serialize(s);

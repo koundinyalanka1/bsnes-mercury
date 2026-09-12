@@ -23,7 +23,9 @@ void DSP::synchronize_smp() {
 void DSP::enter() {
   int clocks = 1;
   if(clock <= -(24 * 32)) clocks = 32;
-  else if(clock <= -24) clocks = (int)((-clock) / 24);
+  // This branch bounds clock to [-767, -24]; divide in native-width
+  // arithmetic rather than paying for 64-bit division on 32-bit hosts.
+  else if(clock <= -24) clocks = -(int)clock / 24;
   if(clocks < 1) clocks = 1;
   spc_dsp.run(clocks);
   step(24 * clocks);

@@ -61,6 +61,8 @@ struct Bus {
   static const uint32 fast_page_size_bits = 13;//keep at 13 or lower so the RAM mirrors can be on the fast path
   static const uint32 fast_page_size = (1 << fast_page_size_bits);
   static const uint32 fast_page_size_mask = (fast_page_size - 1);
+  // Pointers address the beginning of each backing page, not a biased
+  // address outside its allocation. Index with the offset within the page.
   uint8* fast_read[0x1000000>>fast_page_size_bits];
   uint8* fast_write[0x1000000>>fast_page_size_bits];
 

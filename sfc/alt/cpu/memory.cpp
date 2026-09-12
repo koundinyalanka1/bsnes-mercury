@@ -37,7 +37,7 @@ alwaysinline uint8 CPU::op_read(unsigned addr) {
       return regs.mdr;
     }
     if(uint8* page = bus.fast_read[addr >> Bus::fast_page_size_bits]) {
-      regs.mdr = page[addr];
+      regs.mdr = page[addr & Bus::fast_page_size_mask];
       add_clocks(speed(addr));
       return regs.mdr;
     }
@@ -61,7 +61,7 @@ alwaysinline void CPU::op_write(unsigned addr, uint8 data) {
   }
   add_clocks(speed(addr));
   if(uint8* page = bus.fast_write[addr >> Bus::fast_page_size_bits]) {
-    page[addr] = data;
+    page[addr & Bus::fast_page_size_mask] = data;
     return;
   }
   bus.write(addr, data);

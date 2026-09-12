@@ -12,7 +12,7 @@ CPU cpu;
 #include "timing.cpp"
 
 void CPU::step(unsigned clocks) {
-  smp.clock -= clocks * (uint64)smp.frequency;
+  smp_pending_clocks += clocks;
   ppu.clock -= clocks;
   for(unsigned i = 0; i < coprocessors.size(); i++) {
     auto& chip = *coprocessors[i];
@@ -23,7 +23,13 @@ void CPU::step(unsigned clocks) {
   synchronize_controllers();
 }
 
+void CPU::flush_smp_clock() {
+  smp.clock -= smp_pending_clocks * (uint64)smp.frequency;
+  smp_pending_clocks = 0;
+}
+
 void CPU::synchronize_smp() {
+  flush_smp_clock();
   if(SMP::Threaded == true) {
     if(smp.clock < 0) co_switch(smp.thread);
   } else {
@@ -114,6 +120,7 @@ void CPU::power() {
 }
 
 void CPU::reset() {
+  smp_pending_clocks = 0;
   create(Enter, system.cpu_frequency());
   coprocessors.reset();
   PPUcounter::reset();

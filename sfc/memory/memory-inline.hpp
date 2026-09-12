@@ -92,7 +92,7 @@ unsigned Bus::reduce(unsigned addr, unsigned mask)
 
 uint8 Bus::read(unsigned addr) {
   uint8 data;
-  if (fast_read[addr>>fast_page_size_bits]) data = fast_read[addr>>fast_page_size_bits][addr];
+  if (fast_read[addr>>fast_page_size_bits]) data = fast_read[addr>>fast_page_size_bits][addr & fast_page_size_mask];
   else data = reader[lookup[addr]](target[addr]);
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -107,6 +107,6 @@ uint8 Bus::read(unsigned addr) {
 }
 
 void Bus::write(unsigned addr, uint8 data) {
-  if (fast_write[addr>>fast_page_size_bits]) fast_write[addr>>fast_page_size_bits][addr] = data;
+  if (fast_write[addr>>fast_page_size_bits]) fast_write[addr>>fast_page_size_bits][addr & fast_page_size_mask] = data;
   else writer[lookup[addr]](target[addr], data);
 }

@@ -17,7 +17,9 @@ void PPUcounter::tick() {
 //allows stepping by more than the smallest unit of time
 void PPUcounter::tick(unsigned clocks) {
   status.hcounter += clocks;
-  if(status.hcounter >= lineclocks()) {
+  // Every scanline is at least 1360 clocks. Most CPU accesses cannot
+  // reach its end, so avoid loading region/interlace/field on that path.
+  if(status.hcounter >= 1360 && status.hcounter >= lineclocks()) {
     status.hcounter -= lineclocks();
     vcounter_tick();
   }
